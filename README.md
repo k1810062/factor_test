@@ -195,6 +195,102 @@ output/
 | `rr/` | `win_rate_decile.png`, `tail_odds.png`, `{因子}_rr.txt` |
 | `sig/` | `{因子}_kurtosis.png`, `{因子}_sig.txt` |
 
+## 新增因子流程
+
+### 场景一：个股因子
+
+新增一个在个股层面计算的指标（如新的 K 线形态）。
+
+**步骤：**
+
+1. 在 `stock/stock_factors_registry.py` 写函数，输入个股全量 DF，返回因子序列（Series）：
+
+```python
+def my_factor(df):
+    # df 包含 STOCK_CODE, TRADE_DATE, CLOSE, VOL ... 等字段
+    result = df.groupby('STOCK_CODE')['CLOSE'].transform(...)
+    return result
+```
+
+2. 在 `STOCK_FACTORS` 字典注册：
+
+```python
+STOCK_FACTORS = {
+    ...
+    'my_factor': my_factor,
+}
+```
+
+3. 在 `stock/stock_config.json` 添加：
+
+```json
+{"my_factor": {"mode": "skip"}}
+```
+
+4. 运行 `python3 stock/stock_factor_builder.py`
+
+### 场景二：行业因子（简单均值）
+
+将已有个股因子取行业均值作为行业因子。
+
+**步骤：**
+
+1. 在 `industry/factors_registry.py` 的 `FACTOR_FUNCTIONS` 字典添加一行：
+
+```python
+FACTOR_FUNCTIONS = {
+    ...
+    'my_industry_ratio': _stock_mean('my_factor', 'my_industry_ratio'),
+}
+```
+
+`_stock_mean(个股列名, 行业因子名)` 自动做 `groupby(['industry_code', 'TRADE_DATE'])[个股列名].mean()`。
+
+2. 在 `industry/run_config.json` 的 `industry_factors` 中添加：
+
+```json
+"my_industry_ratio": {"cat": "ind", "label": "自定义因子"}
+```
+
+### 场景三：行业因子（独立计算逻辑）
+
+因子需要读取原始数据自行加工，不能通过对个股因子取均值得到。
+
+**步骤：**
+
+1. 在 `industry/factors_registry.py` 写独立函数：
+
+```python
+def my_custom_factor(mapping):
+    data = pd.read_parquet(f'{data_dir}/stock_base.parquet',
+                           columns=['STOCK_CODE', 'TRADE_DATE', ...])
+    data = data.merge(mapping, on=['STOCK_CODE', 'TRADE_DATE'], how='inner')
+    result = data.groupby(['industry_code', 'TRADE_DATE']).apply(...)
+    return result[['industry_code', 'TRADE_DATE', 'my_custom_factor']]
+```
+
+函数签名可选参数：`fac`, `mapping`, `out_dir`。
+结果必须包含 `industry_code` + `TRADE_DATE` + 因子列。
+
+2. 在 `FACTOR_FUNCTIONS` 注册：
+
+```python
+'my_custom_factor': lambda fac, mapping, **kw: my_custom_factor(mapping),
+```
+
+3. 在 `industry/run_config.json` 添加，运行 `python3 industry/run_pipeline.py`
+
+### 场景四：月度因子
+
+和场景三类似，但结果以 `ym`（格式 `YYYYMM`）代替 `TRADE_DATE` 作为时间索引。
+
+**步骤：**
+
+1. 在 `industry/factors_registry.py` 写函数，返回 `[industry_code, ym, 因子列]`
+2. 在 `FACTOR_FUNCTIONS` 注册
+3. 在 `industry/run_config.json` 的 `monthly_factors` 中添加
+4. `analysis` 列表包含 `"monthly"` 则自动参与分析
+
 ## 技术细节
 
 - **运行环境**：Python 3.9+，依赖 pandas, numpy, scipy, matplotlib
