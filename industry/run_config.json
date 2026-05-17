@@ -1,0 +1,21 @@
+{
+  "industry_factors": {
+    "margin_sum5": {"cat": "fund", "label": "区间融资净买入"}
+  },
+  "monthly_factors": {},
+  "analysis": [
+    "charts",
+    "ic",
+    "rr",
+    "sig",
+    "monthly"
+  ],
+  "sub_period": {
+    "from_file": "data/market_periods.json",
+    "groups": [
+      "bull",
+      "bear",
+      "consolidate"
+    ]
+  }
+}
