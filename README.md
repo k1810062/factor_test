@@ -166,6 +166,55 @@ python3 industry/run_pipeline.py
 | 行业因子 | `compute_industry_factors` 按列名判断 | 配置中的因子不在表中则计算 |
 | 分析 | `analysis_base.py` 检查输出子目录 | `{factor_dir}/{check_subdir}/` 已存在则跳过 |
 
+## 新增因子评价指标
+
+系统已有 5 个分析脚本（charts / ic / rr / sig / monthly）。如需新增评价维度（如最大回撤、换手率、信息比等）：
+
+### 步骤
+
+1. 在 `analysis/` 下新建脚本（或直接修改要增加指标的现有脚本）
+
+2. 实现 `factor_fn` 函数，签名固定：
+```python
+def new_metric_fn(df, col, cn_label, cat, base_path):
+    """df: 单个因子的全时段数据
+       col: 因子列名
+       cn_label: 因子中文名
+       cat: 因子分类
+       base_path: 输出目录，如 output/factor_analysis/pv/up_ratio
+    """
+    metric_dir = f'{base_path}/new_metric'
+    os.makedirs(metric_dir, exist_ok=True)
+    # 计算逻辑 …
+    # 保存图表 / txt / parquet
+    print(f'  [{col}] 完成')
+```
+
+3. 实现 `main()` 函数，作为独立运行入口和被 `run_pipeline.py` 调用的统一入口：
+```python
+def main():
+    df = pd.read_parquet('output/data_processed/industry_daily_ratio.parquet')
+    from analysis_base import run_analysis
+    run_analysis(df, new_metric_fn, 'industry', check_subdir='new_metric')
+```
+
+4. 在 `industry/run_pipeline.py` 的 `run_analysis()` 中注册：
+```python
+scripts = {
+    …
+    'new_metric': f'{base}/analysis/analyze_factor_new_metric.py',
+}
+```
+
+5. 在 `industry/run_config.json` 的 `analysis` 列表中添加 `"new_metric"`
+
+### 说明
+
+- `factor_fn` 会被 `analysis_base.run_analysis` 循环调用，每个因子调一次
+- 全量分析和子区间分析自动复用，无需额外处理
+- `check_subdir='new_metric'` 保证增量跳过只检查本指标的输出目录，不与其他分析脚本冲突
+- 月度因子分析同样适用，只需把 `factor_type` 改为 `'monthly'`、`date_col` 改为 `'ym'`
+
 ## 输出结构
 
 ```
