@@ -1,6 +1,6 @@
 """分析脚本共享框架。封装配置读取、因子循环、子区间多组管理等公共逻辑。"""
 import pandas as pd
-import json, os
+import json, os, shutil
 
 
 def load_config():
@@ -17,6 +17,12 @@ def get_factors(factor_type='industry'):
     return [(k, v['label'], v['cat']) for k, v in src.items()]
 
 
+def _get_overwrite(factor_type, col):
+    """读取因子配置中的 overwrite 列表。"""
+    src = _cfg.get(f'{factor_type}_factors', {})
+    return src.get(col, {}).get('overwrite', [])
+
+
 def run_analysis(df, factor_fn, factor_type='industry', date_col='TRADE_DATE',
                  check_subdir=None):
     """
@@ -31,15 +37,20 @@ def run_analysis(df, factor_fn, factor_type='industry', date_col='TRADE_DATE',
     out_dir = 'output'
     analysis_dir = f'{out_dir}/factor_analysis'
 
-    def _skip_factor(d):
+    def _skip_factor(d, col):
         chk = f'{d}/{check_subdir}' if check_subdir else d
+        # overwrite：删掉该分析类型的子目录
+        if check_subdir and check_subdir in _get_overwrite(factor_type, col):
+            if os.path.exists(chk):
+                shutil.rmtree(chk)
+                print(f'  [{col}] overwrite {check_subdir}')
         return os.path.exists(chk) and os.listdir(chk)
 
     # ---- 全量分析 ----
     print(f'开始分析，共 {len(factors)} 个因子\n')
     for col, cn, cat in factors:
         factor_dir = f'{analysis_dir}/{cat}/{col}'
-        if _skip_factor(factor_dir):
+        if _skip_factor(factor_dir, col):
             print(f'  [{col}] 已分析，跳过')
             continue
         factor_fn(df, col, cn, cat, factor_dir)
@@ -87,7 +98,7 @@ def run_analysis(df, factor_fn, factor_type='industry', date_col='TRADE_DATE',
         print(f'\n=== 子区间分析：{suffix} ===')
         for col, cn, cat in factors:
             factor_dir = f'{sub_dir}/{cat}/{col}'
-            if _skip_factor(factor_dir):
+            if _skip_factor(factor_dir, col):
                 print(f'  [{col}] 已分析，跳过')
                 continue
             factor_fn(df_sub, col, cn, cat, factor_dir)

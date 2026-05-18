@@ -166,6 +166,10 @@ def ic_ret_fn(df, col, cn_label, cat, base_path):
     plot_ret_decile(decile_rets, cn_label, f'{ret_dir}/ret_decile.png')
     plot_decile_bar(decile_rets, cn_label, f'{ret_dir}/ret_decile_bar.png')
     plot_long_short(decile_rets, cn_label, f'{ret_dir}/ret_long_short.png')
+    ret_mean = decile_rets.mean()
+    with open(f'{ret_dir}/{col}_ret.txt', 'w') as f:
+        f.write(f'ret_D1={ret_mean[0]:.8f}\nret_D10={ret_mean[9]:.8f}\n'
+                f'ret_spread={ret_mean[9] - ret_mean[0]:.8f}\n')
     print(f'  [{col}] 完成')
 
 

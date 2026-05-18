@@ -183,6 +183,11 @@ def main():
     # 分析（按配置跑）
     run_analysis(cfg)
 
+    # 汇总
+    print('\n=== 生成汇总表 ===')
+    base = __file__.rsplit('/', 2)[0]
+    runpy.run_path(f'{base}/analysis/summarize_results.py', run_name='__main__')
+
     print(f'\n全流程完成, 总耗时 {time.time()-t0:.1f}s')
 
 

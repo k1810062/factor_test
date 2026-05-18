@@ -131,6 +131,10 @@ def monthly_fn(df, col, cn_label, cat, base_path):
     analyze_ret(df, col, cn_label, ret_dir)
     decile_rets = calc_decile_rets(df, col)
     analyze_rr(decile_rets, col, cn_label, rr_dir)
+    ret_mean = decile_rets.mean()
+    with open(f'{ret_dir}/{col}_ret.txt', 'w') as f:
+        f.write(f'ret_D1={ret_mean[0]:.8f}\nret_D10={ret_mean[9]:.8f}\n'
+                f'ret_spread={ret_mean[9] - ret_mean[0]:.8f}\n')
     analyze_sig(df, col, cn_label, sig_dir)
     print(f'  [{col}] 完成')
 

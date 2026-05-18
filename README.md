@@ -15,12 +15,13 @@ run_pipeline.py            行业因子 → Z-score → 分析
     ├── compute_industry_factors()   行业因子聚合 + 增量追加
     ├── compute_zscore()             截面 Z-score 标准化
     ├── compute_monthly_factors()    月度因子计算
-    └── run_analysis()               运行分析脚本
-         ├── analyze_factors.py       统计图（分布/时序/行业柱状）
-         ├── analyze_factor_ic.py     Rank IC + 十分组收益
-         ├── analyze_factor_rr.py     胜率 + 尾部赔率
-         ├── analyze_factor_sig.py    峰度 + ACF(1)
-         └── analyze_factor_monthly.py 月度因子分析
+    ├── run_analysis()               运行分析脚本
+    │    ├── analyze_factors.py       统计图（分布/时序/行业柱状）
+    │    ├── analyze_factor_ic.py     Rank IC + 十分组收益
+    │    ├── analyze_factor_rr.py     胜率 + 尾部赔率
+    │    ├── analyze_factor_sig.py    峰度 + ACF(1)
+    │    └── analyze_factor_monthly.py 月度因子分析
+    └── summarize_results.py         汇总 → result/factor_summary.csv
 ```
 
 ## 数据依赖
@@ -119,6 +120,12 @@ python3 industry/run_pipeline.py
 | `sig` | `analyze_factor_sig.py` | 因子值分布与正态对比、ACF(1) 行业截面统计 |
 | `monthly` | `analyze_factor_monthly.py` | 月度因子的 IC / 十分组收益 / 胜率赔率 / 峰度ACF |
 
+分析支持覆盖模式：在因子配置中添加 `"overwrite": ["ic", "rr"]`，运行该分析类型时自动删除已有结果并重算。
+
+```json
+"margin_sum5": {"cat": "fund", "label": "区间融资净买入", "overwrite": ["ic"]}
+```
+
 #### sub_period
 
 子区间分析支持两种配置方式：
@@ -165,6 +172,9 @@ python3 industry/run_pipeline.py
 | 个股因子 | `stock_factor_builder.py` 检查已有列 | mode="skip" 时跳过 |
 | 行业因子 | `compute_industry_factors` 按列名判断 | 配置中的因子不在表中则计算 |
 | 分析 | `analysis_base.py` 检查输出子目录 | `{factor_dir}/{check_subdir}/` 已存在则跳过 |
+| 分析覆盖 | 因子配置 `overwrite: ["ic"]` | 运行前删除对应子目录后重算 |
+
+pipeline 末尾自动生成跨因子汇总表 `output/result/factor_summary.csv`，包含全部因子在各周期的 IC/RR/SIG/收益指标。
 
 ## 新增因子评价指标
 
@@ -231,7 +241,9 @@ output/
 │   └── monthly/roe_pctl/...
 ├── factor_analysis_bull/                  子区间牛市
 ├── factor_analysis_bear/                  子区间熊市
-└── factor_analysis_consolidate/           子区间震荡
+├── factor_analysis_consolidate/           子区间震荡
+└── result/
+    └── factor_summary.csv                 全部因子 × 周期汇总表
 ```
 
 每个因子目录下的分析文件：
