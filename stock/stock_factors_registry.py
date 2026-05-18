@@ -90,6 +90,18 @@ def break_cons(df):
     return np.where(pd.notna(high20), (df['CLOSE'] == high20).astype(int), np.nan)
 
 
+# 因子名 → 所需 stock_base 列（用于按需读取）
+FACTOR_COLUMNS = {
+    'up_stock': ['CLOSE'],
+    'strong_stock': ['CLOSE'],
+    'strong_volume': ['VOL'],
+    'ma8_pos': ['CLOSE'],
+    'tech_sync': ['CLOSE'],
+    'break_cons': ['CLOSE'],
+    'ma_bull': ['CLOSE'],
+    'ma_bear': ['CLOSE'],
+}
+
 # 因子名 → 函数映射
 STOCK_FACTORS = {
     'up_stock': up_stock,

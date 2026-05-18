@@ -26,11 +26,14 @@ def main():
         print('无个股因子配置，跳过')
         return
 
-    from stock_factors_registry import STOCK_FACTORS
+    from stock_factors_registry import STOCK_FACTORS, FACTOR_COLUMNS
     factor_names = list(selected.keys())
 
-    # 读基础数据
-    df = pd.read_parquet(f'{data_dir}/stock_base.parquet')
+    # 读基础数据（只读需要的列）
+    need_cols = {'STOCK_CODE', 'TRADE_DATE', 'industry', 'industry_code'}
+    for name in factor_names:
+        need_cols.update(FACTOR_COLUMNS.get(name, []))
+    df = pd.read_parquet(f'{data_dir}/stock_base.parquet', columns=list(need_cols))
     df = df.sort_values(['STOCK_CODE', 'TRADE_DATE']).reset_index(drop=True)
     print(f'基础数据: {len(df)} 行')
 

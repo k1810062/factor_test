@@ -32,11 +32,13 @@ def compute_industry_factors(cfg):
 
     if result is None:
         print('=== 行业因子计算（首次）===\n')
-        fac = pd.read_parquet(f'{out_dir}/factor_stock.parquet')
+        fac = pd.read_parquet(f'{out_dir}/factor_stock.parquet',
+                              columns=['STOCK_CODE', 'TRADE_DATE', 'industry', 'industry_code'])
         result = fac[['industry_code', 'industry', 'TRADE_DATE']].drop_duplicates().reset_index(drop=True)
     else:
         print(f'=== 行业因子增量计算 ===')
-        fac = pd.read_parquet(f'{out_dir}/factor_stock.parquet')
+        fac = pd.read_parquet(f'{out_dir}/factor_stock.parquet',
+                              columns=['STOCK_CODE', 'TRADE_DATE', 'industry', 'industry_code'])
 
     mapping = fac[['STOCK_CODE', 'TRADE_DATE', 'industry', 'industry_code']].copy()
 
