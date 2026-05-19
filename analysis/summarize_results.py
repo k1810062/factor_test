@@ -140,7 +140,7 @@ def main():
         df[c] = df[c].round(4)
     os.makedirs(f'{OUT_DIR}/result', exist_ok=True)
     out_path = f'{OUT_DIR}/result/factor_summary.csv'
-    df.to_csv(out_path, index=False, float_format='%.4f')
+    df.to_csv(out_path, index=False, float_format='%.4f', encoding='utf-8-sig')
     print(f'汇总表保存: {len(df)} 行, {len(df.columns)} 列 → {out_path}')
 
 

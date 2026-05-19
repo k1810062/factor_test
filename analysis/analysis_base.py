@@ -1,6 +1,6 @@
 """分析脚本共享框架。封装配置读取、因子循环、子区间多组管理等公共逻辑。"""
 import pandas as pd
-import json, os, shutil
+import json, os, shutil, glob
 
 
 def load_config():
@@ -36,6 +36,14 @@ def run_analysis(df, factor_fn, factor_type='industry', date_col='TRADE_DATE',
     factors = get_factors(factor_type)
     out_dir = 'output'
     analysis_dir = f'{out_dir}/factor_analysis'
+
+    # 全局覆盖：全量 + 所有子区间全部因子，全部清掉
+    global_ow = _cfg.get('analysis_overwrite', [])
+    if check_subdir and check_subdir in global_ow:
+        for chk in glob.glob(f'{out_dir}/factor_analysis*/*/*/{check_subdir}'):
+            if os.path.isdir(chk):
+                shutil.rmtree(chk)
+                print(f'  [覆盖] {os.path.relpath(chk, out_dir)}')
 
     def _skip_factor(d, col):
         chk = f'{d}/{check_subdir}' if check_subdir else d

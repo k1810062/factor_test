@@ -172,9 +172,16 @@ python3 industry/run_pipeline.py
 | 个股因子 | `stock_factor_builder.py` 检查已有列 | mode="skip" 时跳过 |
 | 行业因子 | `compute_industry_factors` 按列名判断 | 配置中的因子不在表中则计算 |
 | 分析 | `analysis_base.py` 检查输出子目录 | `{factor_dir}/{check_subdir}/` 已存在则跳过 |
-| 分析覆盖 | 因子配置 `overwrite: ["ic"]` | 运行前删除对应子目录后重算 |
 
-pipeline 末尾自动生成跨因子汇总表 `output/result/factor_summary.csv`，包含全部因子在各周期的 IC/RR/SIG/收益指标。
+### 覆盖模式
+
+| 模式 | 配置 | 作用范围 |
+|------|------|---------|
+| 单因子计算覆盖 | `"up_ratio": {"overwrite": ["compute"]}` | 只重算该因子，同时清除其分析目录 |
+| 全局计算覆盖 | `"compute_overwrite": true` | 重算配置中所有因子，自动清除所有分析目录 |
+| 全局分析覆盖 | `"analysis_overwrite": ["charts", "ic"]` | 清除所有因子的指定分析目录 |
+
+pipeline 末尾自动生成跨因子汇总表 `output/result/factor_summary.csv`。
 
 ## 新增因子评价指标
 

@@ -13,8 +13,7 @@ data_dir = 'output/data_processed'
 
 def chart_fn(df, col, cn_label, cat, base_path):
     """生成单个因子的统计图。"""
-    period_suffix = f'{df["TRADE_DATE"].min()}_{df["TRADE_DATE"].max()}'
-    sub_dir = f'{base_path}/charts/{col}_{period_suffix}'
+    sub_dir = f'{base_path}/charts'
     os.makedirs(sub_dir, exist_ok=True)
     base = f'{sub_dir}/{col}'
     valid = df[col].dropna()

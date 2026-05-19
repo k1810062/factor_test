@@ -3,7 +3,7 @@
 只计算选中的因子，跳过未选的。
 """
 import pandas as pd
-import json, sys, time, runpy
+import json, sys, time, runpy, glob, shutil
 
 out_dir = 'output/data_processed'
 analysis_dir = 'output/factor_analysis'
@@ -43,11 +43,24 @@ def compute_industry_factors(cfg):
     mapping = fac[['STOCK_CODE', 'TRADE_DATE', 'industry', 'industry_code']].copy()
 
     existing = set(result.columns)
-    for name in factor_names:
-        ow = selected.get(name, {}).get('overwrite', [])
-        if 'compute' in ow and name in existing:
-            result = result.drop(columns=[name])
-            existing.discard(name)
+
+    # 全局覆盖：重算所有行业因子
+    if cfg.get('compute_overwrite'):
+        for name in list(existing):
+            if name in factor_names:
+                result = result.drop(columns=[name])
+                existing.discard(name)
+    else:
+        for name in factor_names:
+            ow = selected.get(name, {}).get('overwrite', [])
+            if 'compute' in ow and name in existing:
+                result = result.drop(columns=[name])
+                existing.discard(name)
+                # 删除该因子的分析目录
+                cat = selected.get(name, {}).get('cat')
+                if cat:
+                    for d in glob.glob(f'output/factor_analysis*/{cat}/{name}'):
+                        shutil.rmtree(d, ignore_errors=True)
 
     to_compute = [n for n in factor_names if n not in existing]
     if not to_compute:
@@ -111,11 +124,24 @@ def compute_monthly_factors(cfg):
         print('=== 月度因子增量计算 ===')
 
     existing = set(result.columns)
-    for name in factor_names:
-        ow = selected.get(name, {}).get('overwrite', [])
-        if 'compute' in ow and name in existing:
-            result = result.drop(columns=[name])
-            existing.discard(name)
+
+    # 全局覆盖：重算所有月度因子
+    if cfg.get('compute_overwrite'):
+        for name in list(existing):
+            if name in factor_names:
+                result = result.drop(columns=[name])
+                existing.discard(name)
+    else:
+        for name in factor_names:
+            ow = selected.get(name, {}).get('overwrite', [])
+            if 'compute' in ow and name in existing:
+                result = result.drop(columns=[name])
+                existing.discard(name)
+                # 删除该因子的分析目录
+                cat = selected.get(name, {}).get('cat')
+                if cat:
+                    for d in glob.glob(f'output/factor_analysis*/{cat}/{name}'):
+                        shutil.rmtree(d, ignore_errors=True)
 
     to_compute = [n for n in factor_names if n not in existing]
     if not to_compute:
@@ -181,6 +207,12 @@ def main():
     # 月度因子计算（已选才跑）
     if cfg.get('monthly_factors'):
         compute_monthly_factors(cfg)
+
+    # 全量重算因子时，自动连带清除所有分析结果
+    if cfg.get('compute_overwrite'):
+        for d in glob.glob(f'{out_dir}/factor_analysis*'):
+            shutil.rmtree(d)
+            print(f'  清除分析结果: {d}')
 
     # 分析（按配置跑）
     run_analysis(cfg)
