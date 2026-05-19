@@ -166,9 +166,9 @@ def base_monthly(out_dir):
     idx['ym'] = idx['TRADE_DATE'].str[:6]
     monthly_close = idx.groupby(['industry_code', 'ym']).tail(1).copy()
     monthly_close = monthly_close.sort_values(['industry_code', 'ym']).reset_index(drop=True)
-    monthly_close['next_ret'] = monthly_close.groupby('industry_code')['idx_close'].transform(
+    monthly_close['ret_T1'] = monthly_close.groupby('industry_code')['idx_close'].transform(
         lambda x: x.shift(-1) / x - 1)
-    return monthly_close[['industry_code', 'ym', 'TRADE_DATE', 'next_ret']]
+    return monthly_close[['industry_code', 'ym', 'TRADE_DATE', 'ret_T1']]
 
 
 def _rating_base():

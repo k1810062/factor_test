@@ -16,9 +16,9 @@ analysis_dir = 'output/factor_analysis'
 def calc_rank_ic(df, factor_col):
     dates, ics = [], []
     for date, grp in df.groupby('TRADE_DATE'):
-        vals = grp[[factor_col, 'next_ret']].dropna()
+        vals = grp[[factor_col, 'ret_T1']].dropna()
         if len(vals) < 10: continue
-        ic, _ = spearmanr(vals[factor_col], vals['next_ret'])
+        ic, _ = spearmanr(vals[factor_col], vals['ret_T1'])
         dates.append(date); ics.append(ic)
     return pd.Series(ics, index=pd.to_datetime(dates, format='%Y%m%d'))
 
@@ -26,11 +26,11 @@ def calc_rank_ic(df, factor_col):
 def calc_decile_rets(df, col):
     dates, rets = [], []
     for date, grp in df.groupby('TRADE_DATE'):
-        grp = grp.dropna(subset=[col, 'next_ret'])
+        grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15: continue
         grp = grp.copy()
         grp['decile'] = pd.qcut(grp[col].rank(method='first'), 10, labels=False)
-        rets.append(grp.groupby('decile')['next_ret'].mean().values)
+        rets.append(grp.groupby('decile')['ret_T1'].mean().values)
         dates.append(date)
     return pd.DataFrame(rets, index=pd.to_datetime(dates, format='%Y%m%d'))
 

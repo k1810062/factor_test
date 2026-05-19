@@ -13,11 +13,11 @@ data_dir = 'output/data_processed'
 def calc_decile_rets(df, col):
     dates, rets = [], []
     for date, grp in df.groupby('TRADE_DATE'):
-        grp = grp.dropna(subset=[col, 'ret_t1'])
+        grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15: continue
         grp = grp.copy()
         grp['decile'] = pd.qcut(grp[col].rank(method='first'), 10, labels=False)
-        rets.append(grp.groupby('decile')['ret_t1'].mean().values)
+        rets.append(grp.groupby('decile')['ret_T1'].mean().values)
         dates.append(date)
     return pd.DataFrame(rets, index=pd.to_datetime(dates, format='%Y%m%d'))
 
@@ -68,7 +68,7 @@ def main():
     idx = idx.rename(columns={'STOCK_CODE': 'industry_code', 'CLOSE': 'idx_close'})
     df = df.merge(idx, on=['industry_code', 'TRADE_DATE'], how='inner')
     df = df.sort_values(['industry_code', 'TRADE_DATE']).reset_index(drop=True)
-    df['ret_t1'] = df.groupby('industry_code')['idx_close'].transform(lambda x: x.shift(-1) / x - 1)
+    df['ret_T1'] = df.groupby('industry_code')['idx_close'].transform(lambda x: x.shift(-1) / x - 1)
     from analysis_base import run_analysis
     run_analysis(df, rr_fn, 'industry', check_subdir='rr')
 

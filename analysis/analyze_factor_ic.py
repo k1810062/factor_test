@@ -16,7 +16,7 @@ HORIZONS = [1, 5, 10, 22]
 def add_forward_returns(df):
     g = df.groupby('industry_code')['idx_close']
     for h in HORIZONS:
-        df[f'ret_t{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
+        df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
     return df
 
 
@@ -124,7 +124,7 @@ def ic_ret_fn(df, col, cn_label, cat, base_path):
 
     ic_dict = {}
     for h in HORIZONS:
-        ic_dict[h] = calc_rank_ic(df, col, f'ret_t{h}')
+        ic_dict[h] = calc_rank_ic(df, col, f'ret_T{h}')
 
     s = ic_dict[1].dropna()
     ic_mean, ic_std = s.mean(), s.std()
