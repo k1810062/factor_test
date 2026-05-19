@@ -180,18 +180,8 @@ def run_analysis(cfg):
     if analysis_dir not in sys.path:
         sys.path.insert(0, analysis_dir)
 
-    scripts = {
-        'charts': f'{base}/analysis/analyze_factors.py',
-        'ic': f'{base}/analysis/analyze_factor_ic.py',
-        'rr': f'{base}/analysis/analyze_factor_rr.py',
-        'sig': f'{base}/analysis/analyze_factor_sig.py',
-        'monthly': f'{base}/analysis/analyze_factor_monthly.py',
-    }
-    for name in analysis:
-        script = scripts.get(name)
-        if script:
-            print(f'\n=== 运行 {name} 分析 ===')
-            runpy.run_path(script, run_name='__main__')
+    if analysis:
+        runpy.run_path(f'{base}/analysis/analyze_all.py', run_name='__main__')
 
 
 def main():
