@@ -208,11 +208,15 @@ def main():
     if cfg.get('monthly_factors'):
         compute_monthly_factors(cfg)
 
-    # 全量重算因子时，自动连带清除所有分析结果
+    # 全量重算因子时，自动连带清除分析结果
     if cfg.get('compute_overwrite'):
-        for d in glob.glob(f'{out_dir}/factor_analysis*'):
-            shutil.rmtree(d)
-            print(f'  清除分析结果: {d}')
+        for key in ('industry_factors', 'monthly_factors'):
+            for col, meta in cfg.get(key, {}).items():
+                cat = meta.get('cat')
+                if cat:
+                    for d in glob.glob(f'output/factor_analysis*/{cat}/{col}'):
+                        shutil.rmtree(d)
+                        print(f'  清除分析: {cat}/{col}')
 
     # 分析（按配置跑）
     run_analysis(cfg)

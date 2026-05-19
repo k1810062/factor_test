@@ -37,13 +37,14 @@ def run_analysis(df, factor_fn, factor_type='industry', date_col='TRADE_DATE',
     out_dir = 'output'
     analysis_dir = f'{out_dir}/factor_analysis'
 
-    # 全局覆盖：全量 + 所有子区间全部因子，全部清掉
+    # 全局覆盖：只清配置中因子的分析目录
     global_ow = _cfg.get('analysis_overwrite', [])
     if check_subdir and check_subdir in global_ow:
-        for chk in glob.glob(f'{out_dir}/factor_analysis*/*/*/{check_subdir}'):
-            if os.path.isdir(chk):
-                shutil.rmtree(chk)
-                print(f'  [覆盖] {os.path.relpath(chk, out_dir)}')
+        for col, _, cat in factors:
+            for chk in glob.glob(f'{out_dir}/factor_analysis*/{cat}/{col}/{check_subdir}'):
+                if os.path.isdir(chk):
+                    shutil.rmtree(chk)
+                    print(f'  [覆盖] {os.path.relpath(chk, out_dir)}')
 
     def _skip_factor(d, col):
         chk = f'{d}/{check_subdir}' if check_subdir else d

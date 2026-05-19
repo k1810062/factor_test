@@ -106,13 +106,37 @@ def read_ret(factor_dir, col):
     return result
 
 
+def _parse_label(factor_dir, col):
+    """从 IC/RR/SIG 文本中解析因子中文名。"""
+    for txt in (f'{factor_dir}/ic/{col}_ic.txt',
+                f'{factor_dir}/rr/{col}_rr.txt',
+                f'{factor_dir}/sig/{col}_sig.txt'):
+        if os.path.exists(txt):
+            m = re.search(rf'{re.escape(col)}\s*\((.+?)\)', open(txt).read())
+            if m:
+                return m.group(1)
+    return col
+
+
+def scan_factors():
+    """扫描分析目录，所有有分析结果的因子全纳入。"""
+    factors = set()
+    for ic_file in glob.glob(f'{OUT_DIR}/factor_analysis/*/*/ic/*_ic.txt'):
+        col = os.path.basename(ic_file).replace('_ic.txt', '')
+        cat = ic_file.split('/')[-4]
+        factor_dir = f'{OUT_DIR}/factor_analysis/{cat}/{col}'
+        label = _parse_label(factor_dir, col)
+        factors.add((col, label, cat))
+    return list(factors)
+
+
 def main():
     cfg = load_config()
-    factors = get_factors(cfg)
+    factors = scan_factors()
     periods = get_periods(cfg)
 
     rows = []
-    for col, label, cat, _ in factors:
+    for col, label, cat in factors:
         for period_name, base_path in periods:
             factor_dir = f'{base_path}/{cat}/{col}'
             row = {'factor': col, 'label': label, 'cat': cat, 'period': period_name}
@@ -130,6 +154,9 @@ def main():
         return
 
     df = pd.DataFrame(rows)
+    # 月度因子排在最后
+    df['_sort'] = df['cat'].map({'monthly': 1}).fillna(0)
+    df = df.sort_values(['_sort', 'cat', 'factor', 'period']).drop(columns=['_sort'])
     # 胜率转百分数，其余数值保留四位小数
     pct_cols = {'long_win', 'short_win'}
     for c in df.columns:
