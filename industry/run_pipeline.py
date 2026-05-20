@@ -177,7 +177,9 @@ def run_analysis(cfg):
 
 
     if analysis:
+        t0 = time.time()
         runpy.run_path(f'{base}/analysis/analyze_all.py', run_name='__main__')
+        print(f'  分析总耗时: {time.time()-t0:.1f}s')
 
 
 def main():
@@ -186,13 +188,19 @@ def main():
 
     # 行业因子计算（已选才跑）
     if cfg.get('industry_factors'):
+        t1 = time.time()
         compute_industry_factors(cfg)
+        print(f'  行业因子耗时: {time.time()-t1:.1f}s')
         print('\n=== 截面 Z-score 标准化 ===')
+        t1 = time.time()
         compute_zscore()
+        print(f'  Z-score 耗时: {time.time()-t1:.1f}s')
 
     # 月度因子计算（已选才跑）
     if cfg.get('monthly_factors'):
+        t1 = time.time()
         compute_monthly_factors(cfg)
+        print(f'  月度因子耗时: {time.time()-t1:.1f}s')
 
     # 全量重算因子时，自动连带清除分析结果
     if cfg.get('compute_overwrite'):

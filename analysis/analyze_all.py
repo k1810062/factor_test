@@ -1,5 +1,5 @@
 """分析统一入口。自动对所有因子类型运行配置的分析。"""
-import json
+import json, time
 from analysis import load_data, run_analysis, chart_fn, ic_ret_fn, rr_fn, sig_fn
 
 FUNCTIONS = {
@@ -22,9 +22,11 @@ def main():
         for name in analysis_list:
             if name not in FUNCTIONS:
                 continue
+            t0 = time.time()
             print(f'\n=== {factor_type} {name} 分析 ===')
             run_analysis(df, FUNCTIONS[name], factor_type,
                          date_col=date_col, check_subdir=name)
+            print(f'  [{name}] 耗时: {time.time()-t0:.1f}s')
 
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 """Rank IC 分析 + 十分组累计收益。"""
+import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,16 +7,17 @@ import matplotlib.ticker as mticker
 import os
 from scipy.stats import spearmanr
 
+warnings.filterwarnings('ignore', message='An input array is constant')
+
 plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'PingFang SC', 'Heiti TC', 'WenQuanYi Micro Hei']
 plt.rcParams['axes.unicode_minus'] = False
 
 data_dir = 'output/data_processed'
-HORIZONS = [1, 5, 10, 22]
 
 
 def add_forward_returns(df):
     g = df.groupby('industry_code')['idx_close']
-    for h in HORIZONS:
+    for h in (1, 5, 10, 22):
         df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
     return df
 
@@ -122,8 +124,14 @@ def ic_ret_fn(df, col, cn_label, cat, base_path):
     ic_dir = f'{base_path}/ic'; ret_dir = f'{base_path}/ret'
     os.makedirs(ic_dir, exist_ok=True); os.makedirs(ret_dir, exist_ok=True)
 
+    # 按数据中已有的 ret_T 列确定 horizon
+    horizons = sorted(int(h.split('_T')[1]) for h in df.columns if h.startswith('ret_T'))
+    if not horizons:
+        print(f'  [{col}] 无 ret_T 列，跳过')
+        return
+
     ic_dict = {}
-    for h in HORIZONS:
+    for h in horizons:
         ic_dict[h] = calc_rank_ic(df, col, f'ret_T{h}')
 
     s = ic_dict[1].dropna()
@@ -135,7 +143,7 @@ def ic_ret_fn(df, col, cn_label, cat, base_path):
         f.write(f'因子: {col} ({cn_label})\n样本数(月): {len(s)}\n')
         f.write(f'IC 均值: {ic_mean:.6f}\nIC 标准差: {ic_std:.6f}\nICIR: {icir:.4f}\nt 统计量: {t_stat:.4f}\n')
         f.write(f'\n{"Horizon":>8} {"IC均值":>10} {"IC标准差":>10} {"ICIR":>10} {"t统计量":>10}\n')
-        for h in HORIZONS:
+        for h in horizons:
             s2 = ic_dict[h].dropna()
             m, std = s2.mean(), s2.std()
             ir = m / std if std > 0 else 0
@@ -157,8 +165,8 @@ def ic_ret_fn(df, col, cn_label, cat, base_path):
     fig.suptitle(f'{cn_label} — IC 分布', fontsize=13)
     fig.tight_layout(); fig.savefig(f'{ic_dir}/ic_dist.png', dpi=150); plt.close(fig)
 
-    ic_df = pd.DataFrame({f'T+{h}': ic_dict[h] for h in HORIZONS}).reset_index()
-    ic_df.columns = ['TRADE_DATE'] + [f'T+{h}' for h in HORIZONS]
+    ic_df = pd.DataFrame({f'T+{h}': ic_dict[h] for h in horizons}).reset_index()
+    ic_df.columns = ['TRADE_DATE'] + [f'T+{h}' for h in horizons]
     ic_df['TRADE_DATE'] = ic_df['TRADE_DATE'].dt.strftime('%Y%m%d')
     ic_df.to_parquet(f'{ic_dir}/{col}_ic.parquet', index=False)
 
