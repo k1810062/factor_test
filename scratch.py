@@ -52,9 +52,14 @@ def main():
         json.dump(cfg, f, ensure_ascii=False, indent=2)
     print(f'  → config.json 已改写（只保留新因子，覆盖分析）')
 
-    # 跑 main
-    print('\n=== 运行 main.py ===')
-    os.system('python3 main.py')
+    # 跑 Pipeline
+    print('\n=== 运行 Pipeline ===')
+    from framework.pipeline import Pipeline
+    p = Pipeline(CONFIG_PATH, backend='duckdb')
+    try:
+        p.run()
+    finally:
+        p.close()
 
 
 if __name__ == '__main__':

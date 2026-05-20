@@ -1,29 +1,34 @@
 {
   "industry": {
-    "ret_5d": {
-      "cat": "pv",
-      "label": "5日涨幅",
-      "mode": "overwrite"
-    }
+    "up_ratio": {"cat": "pv", "label": "上涨家数占比"},
+    "strong_ratio": {"cat": "pv", "label": "强势股涨幅占比"},
+    "vol_ratio": {"cat": "pv", "label": "强势成交量占比"},
+    "ma8_pos_avg": {"cat": "pv", "label": "8日均线多头占比"},
+    "tech_sync_rt": {"cat": "pv", "label": "技术指标同步率"},
+    "break_cons_rt": {"cat": "pv", "label": "突破整理形态占比"},
+    "ma_bull": {"cat": "pv", "label": "多头均线占比"},
+    "ma_bear": {"cat": "pv", "label": "空头均线占比"},
+    "ma5_ratio": {"cat": "pv", "label": "MA5上方占比"},
+    "strong_fund_ratio": {"cat": "fund", "label": "强势股资金占比"},
+    "margin_sum5": {"cat": "fund", "label": "融资净买入5日滚动"},
+    "margin_dir": {"cat": "fund", "label": "融资盘方向"},
+    "diverge_5d": {"cat": "fund", "label": "主力资金背离度"},
+    "amt_divg": {"cat": "fund", "label": "成交占比乖离率"},
+    "etf_inflow_st": {"cat": "fund", "label": "行业ETF净流入5日平滑"},
+    "turn_pctl": {"cat": "ind", "label": "换手率分位数"},
+    "ret_divg": {"cat": "ind", "label": "涨幅分化度"},
+    "pb_disp": {"cat": "ind", "label": "估值离散度"},
+    "mom_12m": {"cat": "ind", "label": "动量因子"}
   },
-  "analysis": [
-    "charts",
-    "ic",
-    "rr",
-    "sig"
-  ],
-  "analysis_overwrite": [
-    "charts",
-    "ic",
-    "rr",
-    "sig"
-  ],
+  "monthly": {
+    "upg_cnt_rt": {"cat": "monthly", "label": "上调数量占比"},
+    "upg_mv_rt": {"cat": "monthly", "label": "上调市值占比"},
+    "roe_pctl": {"cat": "monthly", "label": "盈利景气度"},
+    "mom_12m_m": {"cat": "monthly", "label": "月度动量因子"}
+  },
+  "analysis": ["charts", "ic", "rr", "sig"],
   "sub_period": {
     "from_file": "data/market_periods.json",
-    "groups": [
-      "bull",
-      "bear",
-      "consolidate"
-    ]
+    "groups": ["bull", "bear", "consolidate"]
   }
 }
