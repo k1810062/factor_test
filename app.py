@@ -80,24 +80,86 @@ if names and os.path.exists(csv_path):
         full = factor_df[factor_df['period'] == 'full']
         if not full.empty:
             row = full.iloc[0]
-            cols = st.columns(5)
-            cols[0].metric('IC 均值(T1)', f"{row['ic_mean_T1']:.4f}" if not na(row.get('ic_mean_T1')) else '-')
-            cols[1].metric('ICIR(T1)', f"{row['icir_T1']:.4f}" if not na(row.get('icir_T1')) else '-')
-            cols[2].metric('多头胜率', f"{row['long_win']:.1f}%" if not na(row.get('long_win')) else '-')
-            cols[3].metric('空头胜率', f"{row['short_win']:.1f}%" if not na(row.get('short_win')) else '-')
-            cols[4].metric('超额峰度', f"{row['kurtosis']:.2f}" if not na(row.get('kurtosis')) else '-')
+            # 动态读取 CSV 中的 IC 均值和 ICIR 列
+            ic_mean_cols = sorted([c for c in row.index if c.startswith('ic_mean_T')],
+                                  key=lambda x: int(x.split('_T')[1]))
+            icir_cols = sorted([c for c in row.index if c.startswith('icir_T')],
+                               key=lambda x: int(x.split('_T')[1]))
 
+            if ic_mean_cols:
+                cols = st.columns(len(ic_mean_cols))
+                for i, c in enumerate(ic_mean_cols):
+                    h = c.split('_T')[1]
+                    cols[i].metric(f'IC均值(T{h})', f"{row[c]:.4f}" if not na(row.get(c)) else '-')
+            if icir_cols:
+                cols = st.columns(len(icir_cols))
+                for i, c in enumerate(icir_cols):
+                    h = c.split('_T')[1]
+                    cols[i].metric(f'ICIR(T{h})', f"{row[c]:.4f}" if not na(row.get(c)) else '-')
+
+            # 胜率、峰度等
+            extra = []
+            if not na(row.get('long_win')):
+                extra.append(('多头胜率', f"{row['long_win']:.1f}%"))
+            if not na(row.get('short_win')):
+                extra.append(('空头胜率', f"{row['short_win']:.1f}%"))
+            if not na(row.get('kurtosis')):
+                extra.append(('超额峰度', f"{row['kurtosis']:.2f}"))
+            if extra:
+                cols = st.columns(len(extra))
+                for i, (label, val) in enumerate(extra):
+                    cols[i].metric(label, val)
+
+        import plotly.graph_objects as go
         cat_map = dict(zip(factor_df['factor'], factor_df['cat']))
         for name in names:
             cat = cat_map.get(name)
             if not cat:
                 continue
-            ic_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/ic_cum.png')
-            if os.path.exists(ic_png):
-                st.image(ic_png, caption=f'{name} 累计 IC', use_container_width=True)
-            ret_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/ret_long_short.png')
-            if os.path.exists(ret_png):
-                st.image(ret_png, caption=f'{name} 多空收益', use_container_width=True)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                ic_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
+                if os.path.exists(ic_parquet):
+                    ic_df = pd.read_parquet(ic_parquet)
+                    ic_df['TRADE_DATE'] = pd.to_datetime(ic_df['TRADE_DATE'], format='%Y%m%d')
+                    ic_df = ic_df.sort_values('TRADE_DATE').reset_index(drop=True)
+                    fig = go.Figure()
+                    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+                    for h, color in zip([c for c in ic_df.columns if c != 'TRADE_DATE'], colors):
+                        vals = ic_df[h].dropna().cumsum()
+                        fig.add_trace(go.Scatter(x=vals.index, y=vals.values, mode='lines',
+                            name=h, line=dict(color=color, width=1.5)))
+                    fig.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
+                    fig.update_layout(title=f'{name} 累计 Rank IC',
+                        hovermode='x unified', height=300,
+                        margin=dict(l=10, r=10, t=30, b=10), showlegend=True)
+                    st.plotly_chart(fig, use_container_width=True, key=f'ic_{name}')
+                else:
+                    ic_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/ic_cum.png')
+                    if os.path.exists(ic_png):
+                        st.image(ic_png, caption=f'{name} 累计 IC', use_container_width=True)
+            with c2:
+                ret_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/{name}_decile_rets.parquet')
+                if os.path.exists(ret_parquet):
+                    ret_df = pd.read_parquet(ret_parquet)
+                    cum = (1 + ret_df).cumprod() - 1
+                    fig2 = go.Figure()
+                    fig2.add_trace(go.Scatter(x=cum.index, y=cum[9], mode='lines',
+                        name='多头(D10)', line=dict(color='crimson', width=1.5)))
+                    fig2.add_trace(go.Scatter(x=cum.index, y=cum[0], mode='lines',
+                        name='空头(D1)', line=dict(color='steelblue', width=1.5)))
+                    fig2.add_trace(go.Scatter(x=cum.index, y=cum[9] - cum[0], mode='lines',
+                        name='多空(D10-D1)', line=dict(color='darkgreen', width=2)))
+                    fig2.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
+                    fig2.update_layout(title=f'{name} 多空收益',
+                        hovermode='x unified', height=300,
+                        margin=dict(l=10, r=10, t=30, b=10))
+                    st.plotly_chart(fig2, use_container_width=True, key=f'ret_{name}')
+                else:
+                    ret_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/ret_long_short.png')
+                    if os.path.exists(ret_png):
+                        st.image(ret_png, caption=f'{name} 多空收益', use_container_width=True)
 
         st.subheader('牛熊对比')
         periods = factor_df[factor_df['period'] != 'full'][['period', 'ic_mean_T1', 'icir_T1', 'long_win', 'short_win']].copy()

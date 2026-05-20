@@ -166,6 +166,7 @@ def ic_metric(df, col, cn_label, cat, base_path):
     ic_df.to_parquet(f'{ic_dir}/{col}_ic.parquet', index=False)
 
     decile_rets = _calc_decile_rets(df, col)
+    decile_rets.to_parquet(f'{ret_dir}/{col}_decile_rets.parquet', index=True)
     _plot_ret_decile(decile_rets, cn_label, f'{ret_dir}/ret_decile.png')
     _plot_decile_bar(decile_rets, cn_label, f'{ret_dir}/ret_decile_bar.png')
     _plot_long_short(decile_rets, cn_label, f'{ret_dir}/ret_long_short.png')

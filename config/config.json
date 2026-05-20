@@ -1,18 +1,23 @@
 {
-  "industry": {
-    "ret_5d": {
+  "stock": {
+    "up_stock": {
       "cat": "pv",
-      "label": "5日涨幅",
-      "mode": "overwrite"
+      "label": "当日是否上涨"
+    }
+  },
+  "industry": {
+    "up_ratio": {
+      "cat": "pv",
+      "label": "上涨家数占比"
+    }
+  },
+  "monthly": {
+    "upg_cnt_rt": {
+      "cat": "monthly",
+      "label": "上调数量占比"
     }
   },
   "analysis": [
-    "charts",
-    "ic",
-    "rr",
-    "sig"
-  ],
-  "analysis_overwrite": [
     "charts",
     "ic",
     "rr",
