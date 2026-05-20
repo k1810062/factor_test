@@ -222,8 +222,10 @@ def etf_inflow_st(api):
 
 @factor(name='mom_12m', category='ind', label='动量因子', domain='industry')
 def mom_12m(api):
-    swidx = _swi_idx(api).sort_values(['industry_code', 'TRADE_DATE']).reset_index(drop=True)
-    swidx['mom_12m'] = swidx.groupby('industry_code')['idx_close'].transform(
-        lambda x: x.shift(21) / x.shift(252) - 1)
-    return swidx[['industry_code', 'TRADE_DATE', 'mom_12m']]
+    return api.query("""
+        SELECT STOCK_CODE as industry_code, TRADE_DATE,
+               (LAG(CLOSE, 21) OVER w / LAG(CLOSE, 252) OVER w - 1) as mom_12m
+        FROM swi_daily
+        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
+    """)
 

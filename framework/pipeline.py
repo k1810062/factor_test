@@ -10,10 +10,15 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from framework.data_api import DataAPI
-from framework.registry import get_factors, get_metrics
+from framework.registry import get_factors
+from framework.metric_runner import run_metrics
 import factors.stock_factors
 import factors.industry_factors
 import factors.monthly_factors
+import metrics.chart_metric
+import metrics.ic_metric
+import metrics.rr_metric
+import metrics.sig_metric
 
 # 各 domain 的输出路径
 OUTPUT_PATHS = {
@@ -183,19 +188,47 @@ class Pipeline:
               f'{len([c for c in result_df.columns if c not in key_cols])} 个因子)')
 
     def _run_analysis(self):
-        """运行评价指标（暂用现有分析流程）。"""
+        """运行评价指标（直接调 @metric 函数）。"""
         analysis = self.cfg.get('analysis', [])
         if not analysis:
             return
-        base = os.path.dirname(os.path.dirname(__file__))
-        import runpy
-        runpy.run_path(f'{base}/analysis/analyze_all.py', run_name='__main__')
+
+        for factor_type in ('industry', 'monthly'):
+            date_col = 'ym' if factor_type == 'monthly' else 'TRADE_DATE'
+            df = self._load_analysis_data(factor_type)
+            if df is None:
+                continue
+            for name in analysis:
+                t0 = time.time()
+                print(f'\n=== {factor_type} {name} 分析 ===')
+                run_metrics(self.cfg, factor_type, df, date_col=date_col, check_subdir=name)
+                print(f'  [{name}] 耗时: {time.time()-t0:.1f}s')
+
+    def _load_analysis_data(self, factor_type):
+        """加载分析用的数据（因子值 + 指数 + 前向收益）。"""
+        if factor_type == 'industry':
+            df = self.api.table('industry_daily', columns=None)
+            # 合并指数数据算前向收益
+            idx = self.api.table('swi_daily', columns=['STOCK_CODE', 'TRADE_DATE', 'CLOSE'])
+            idx = idx.rename(columns={'STOCK_CODE': 'industry_code', 'CLOSE': 'idx_close'})
+            df = df.merge(idx, on=['industry_code', 'TRADE_DATE'], how='inner')
+            df = df.sort_values(['industry_code', 'TRADE_DATE']).reset_index(drop=True)
+            g = df.groupby('industry_code')['idx_close']
+            for h in (1, 5, 10, 22):
+                df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
+            return df
+        elif factor_type == 'monthly':
+            df = self.api.table('industry_monthly', columns=None)
+            if 'ym' in df.columns:
+                return df
+            # 没有 ym 说明不是月度数据
+            return None
+        return None
 
     def _run_summary(self):
-        """生成汇总表（暂用现有汇总脚本）。"""
-        base = os.path.dirname(os.path.dirname(__file__))
-        import runpy
-        runpy.run_path(f'{base}/analysis/summarize_results.py', run_name='__main__')
+        """生成汇总表。"""
+        from analysis.summarize_results import main as summary_main
+        summary_main()
 
     def close(self):
         self.api.close()
