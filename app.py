@@ -10,7 +10,8 @@ BASE = os.path.dirname(__file__)
 sys.path.insert(0, BASE)
 
 st.set_page_config(page_title='因子测试', layout='wide')
-st.title('因子草稿测试')
+st.title('因子测试')
+
 
 csv_path = os.path.join(BASE, 'output/result/factor_summary.csv')
 
@@ -91,20 +92,22 @@ if names and os.path.exists(csv_path):
                              f'<strong style="font-size:18px;color:#222">{value}</strong></p>',
                              unsafe_allow_html=True)
 
-            # 收集所有指标到一行
+            # 收集所有指标到一行（IC 和 IR 成对）
             all_items = []
-            for c in ic_mean_cols:
-                h = c.split('_T')[1]
-                v = f"{row[c]:.4f}" if not na(row.get(c)) else '-'
-                all_items.append((f'IC均值(T{h})', v))
-            for c in icir_cols:
-                h = c.split('_T')[1]
-                v = f"{row[c]:.4f}" if not na(row.get(c)) else '-'
-                all_items.append((f'ICIR(T{h})', v))
+            for ic, ir in zip(ic_mean_cols, icir_cols):
+                h = ic.split('_T')[1]
+                v_ic = f"{row[ic]:.4f}" if not na(row.get(ic)) else '-'
+                v_ir = f"{row[ir]:.4f}" if not na(row.get(ir)) else '-'
+                all_items.append((f'IC均值(T{h})', v_ic))
+                all_items.append((f'ICIR(T{h})', v_ir))
             if not na(row.get('long_win')):
                 all_items.append(('多头胜率', f"{row['long_win']:.1f}%"))
             if not na(row.get('short_win')):
                 all_items.append(('空头胜率', f"{row['short_win']:.1f}%"))
+            if not na(row.get('long_odds')):
+                all_items.append(('多赔率', f"{row['long_odds']:.2f}"))
+            if not na(row.get('short_odds')):
+                all_items.append(('空赔率', f"{row['short_odds']:.2f}"))
             if not na(row.get('kurtosis')):
                 all_items.append(('超额峰度', f"{row['kurtosis']:.2f}"))
 
@@ -112,7 +115,7 @@ if names and os.path.exists(csv_path):
             for i, (label, val) in enumerate(all_items):
                 _small_metric(cols[i], label, val)
 
-            st.write('')  # 和图之间的空白
+            st.divider()
 
         import plotly.graph_objects as go
         cat_map = dict(zip(factor_df['factor'], factor_df['cat']))
@@ -165,19 +168,43 @@ if names and os.path.exists(csv_path):
                     if os.path.exists(ret_png):
                         st.image(ret_png, caption=f'{name} 多空收益', use_container_width=True)
 
+            # 十分组日均收益柱状图
+            if os.path.exists(ret_parquet):
+                means = ret_df.mean() * 100
+                bar_colors = ['#1a9850','#91cf60','#d9ef8b','#fee08b','#fc8d59',
+                              '#ef6548','#d73027','#b30000','#7f0000','#4d0000']
+                fig3 = go.Figure()
+                fig3.add_trace(go.Bar(x=[f'D{i+1}' for i in range(10)], y=means.values,
+                    marker_color=bar_colors))
+                fig3.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
+                fig3.update_layout(title=f'{name} 十分组日均收益',
+                    xaxis_title='分组', yaxis_title='日均收益率(%)',
+                    height=300, margin=dict(l=10, r=10, t=30, b=10))
+                st.plotly_chart(fig3, use_container_width=True, key=f'bar_{name}')
+
         st.subheader('牛熊对比')
         ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_mean_T')],
                          key=lambda x: int(x.split('_T')[1]))
         ir_cols = sorted([c for c in factor_df.columns if c.startswith('icir_T')],
                          key=lambda x: int(x.split('_T')[1]))
-        extra_cols = [c for c in ['long_win', 'short_win'] if c in factor_df.columns]
-        cols = ['period'] + ic_cols + ir_cols + extra_cols
+        # IC 和 IR 按周期配对排列
+        paired = []
+        for ic, ir in zip(ic_cols, ir_cols):
+            paired += [ic, ir]
+        extra_cols = [c for c in ['long_win', 'short_win', 'long_odds', 'short_odds'] if c in factor_df.columns]
+        cols = ['period'] + paired + extra_cols
         periods = factor_df[factor_df['period'] != 'full'][cols].copy()
         if not periods.empty:
             periods = periods.rename(columns={'period': '区间'})
             for c in ['long_win', 'short_win']:
                 if c in periods.columns:
                     periods[c] = periods[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
-            st.dataframe(periods, hide_index=True,
-                         column_config={c: st.column_config.TextColumn(c, alignment='center')
-                                        for c in periods.columns})
+            for c in ['long_odds', 'short_odds']:
+                if c in periods.columns:
+                    periods[c] = periods[c].apply(lambda x: f'{x:.2f}' if pd.notna(x) else '-')
+            # 用 HTML 表格居中显示，等宽
+            html = periods.to_html(index=False, na_rep='-')
+            html = html.replace('<table', '<table style="width:100%;table-layout:fixed;font-size:13px"')
+            html = html.replace('<th>', '<th style="text-align:center">')
+            html = html.replace('<td>', '<td style="text-align:center">')
+            st.markdown(html, unsafe_allow_html=True)
