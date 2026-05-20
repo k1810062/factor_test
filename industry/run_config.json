@@ -8,6 +8,7 @@
     "break_cons_rt": {"cat": "pv", "label": "突破整理形态占比"},
     "ma_bull": {"cat": "pv", "label": "多头均线占比"},
     "ma_bear": {"cat": "pv", "label": "空头均线占比"},
+    "ma5_ratio": {"cat": "pv", "label": "MA5上方占比"},
     "strong_fund_ratio": {"cat": "fund", "label": "强势股资金占比"},
     "margin_sum5": {"cat": "fund", "label": "融资净买入5日滚动"},
     "margin_dir": {"cat": "fund", "label": "融资盘方向"},

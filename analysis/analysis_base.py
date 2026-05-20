@@ -4,7 +4,10 @@ import json, os, shutil, glob
 
 
 def load_config():
-    with open('industry/run_config.json') as f:
+    path = 'config/config.json'
+    if not os.path.exists(path):
+        path = 'industry/run_config.json'  # fallback 旧路径
+    with open(path) as f:
         return json.load(f)
 
 
@@ -12,14 +15,14 @@ _cfg = load_config()
 
 
 def get_factors(factor_type='industry'):
-    """返回 [(列名, 中文名, 分类)]。"""
-    src = _cfg.get(f'{factor_type}_factors', {})
+    """返回 [(列名, 中文名, 分类)]。兼容新旧配置格式。"""
+    src = _cfg.get(factor_type) or _cfg.get(f'{factor_type}_factors', {})
     return [(k, v['label'], v['cat']) for k, v in src.items()]
 
 
 def _get_overwrite(factor_type, col):
-    """读取因子配置中的 overwrite 列表。"""
-    src = _cfg.get(f'{factor_type}_factors', {})
+    """读取因子配置中的 overwrite 列表。兼容新旧格式。"""
+    src = _cfg.get(factor_type) or _cfg.get(f'{factor_type}_factors', {})
     return src.get(col, {}).get('overwrite', [])
 
 

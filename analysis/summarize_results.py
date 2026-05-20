@@ -7,7 +7,10 @@ DATA_DIR = 'output/data_processed'
 
 
 def load_config():
-    with open('industry/run_config.json') as f:
+    path = 'config/config.json'
+    if not os.path.exists(path):
+        path = 'industry/run_config.json'
+    with open(path) as f:
         return json.load(f)
 
 
@@ -25,12 +28,13 @@ def get_periods(cfg):
 
 
 def get_factors(cfg):
-    """返回所有配置的因子（行业 + 月度），含 meta。"""
+    """返回所有配置的因子（行业 + 月度），含 meta。兼容新旧格式。"""
     factors = []
-    for key in ('industry_factors', 'monthly_factors'):
-        src = cfg.get(key, {})
+    # 新格式: industry/monthly  旧格式: industry_factors/monthly_factors
+    for new_key, old_key in (('industry', 'industry_factors'), ('monthly', 'monthly_factors')):
+        src = cfg.get(new_key) or cfg.get(old_key, {})
         for col, meta in src.items():
-            factors.append((col, meta['label'], meta['cat'], key))
+            factors.append((col, meta['label'], meta['cat'], old_key))
     return factors
 
 

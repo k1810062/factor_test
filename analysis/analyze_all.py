@@ -11,11 +11,11 @@ FUNCTIONS = {
 
 
 def main():
-    cfg = json.load(open('industry/run_config.json'))
+    cfg = json.load(open('config/config.json'))
     analysis_list = cfg.get('analysis', [])
 
     for factor_type in ('industry', 'monthly'):
-        if not cfg.get(f'{factor_type}_factors'):
+        if not cfg.get(f'{factor_type}_factors') and not cfg.get(factor_type):
             continue
         date_col = 'ym' if factor_type == 'monthly' else 'TRADE_DATE'
         df = load_data(factor_type)

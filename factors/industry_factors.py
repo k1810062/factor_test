@@ -70,6 +70,17 @@ def ma_bear(api):
     return fac.groupby(['industry_code', 'TRADE_DATE'])['ma_bear'].mean().reset_index()
 
 
+@factor(name='ma5_ratio', category='pv', label='MA5上方占比', domain='industry')
+def ma5_ratio(api):
+    stock = api.table('stock_base', columns=['STOCK_CODE', 'TRADE_DATE', 'CLOSE'])
+    mapping = api.table('factor_stock', columns=['STOCK_CODE', 'TRADE_DATE', 'industry_code'])
+    stock = stock.merge(mapping, on=['STOCK_CODE', 'TRADE_DATE'], how='inner')
+    stock = stock.sort_values(['STOCK_CODE', 'TRADE_DATE'])
+    ma5 = stock.groupby('STOCK_CODE')['CLOSE'].transform(lambda x: x.rolling(5).mean())
+    stock['above_ma5'] = (stock['CLOSE'] > ma5).astype(int)
+    return stock.groupby(['industry_code', 'TRADE_DATE'])['above_ma5'].mean().reset_index(name='ma5_ratio')
+
+
 # ─── 10 个复杂因子（读原始数据） ───
 
 @factor(name='strong_fund_ratio', category='fund', label='强势股资金占比', domain='industry')

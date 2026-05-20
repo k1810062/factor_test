@@ -11,6 +11,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from framework.data_api import DataAPI
 from framework.registry import get_factors, get_metrics
+import factors.stock_factors
+import factors.industry_factors
+import factors.monthly_factors
 
 # 各 domain 的输出路径
 OUTPUT_PATHS = {
