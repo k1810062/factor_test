@@ -4,7 +4,7 @@
 """
 
 import streamlit as st
-import sys, os, json, re, subprocess, tempfile, glob
+import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 
 BASE = os.path.dirname(__file__)
 sys.path.insert(0, BASE)
@@ -204,10 +204,14 @@ if names and os.path.exists(csv_path):
                 for idx, h in enumerate(horizons):
                     with cols[idx]:
                         vals = ic_df[h].dropna()
+                        mu, sigma = vals.mean(), vals.std()
+                        x_range = np.linspace(vals.min(), vals.max(), 100)
                         fig4 = go.Figure()
-                        fig4.add_trace(go.Histogram(x=vals, nbinsx=40, name=f'T+{h}',
-                            marker_color=colors[idx], opacity=0.7))
-                        fig4.add_vline(x=vals.mean(), line_dash='dash', line_color='crimson', line_width=1.2)
+                        fig4.add_trace(go.Histogram(x=vals, histnorm='probability density',
+                            nbinsx=40, name=f'T+{h}', marker_color=colors[idx], opacity=0.7))
+                        fig4.add_trace(go.Scatter(x=x_range, y=np.exp(-(x_range-mu)**2/(2*sigma**2))/(sigma*np.sqrt(2*np.pi)),
+                            mode='lines', name='正态分布', line=dict(color='red', width=1.5)))
+                        fig4.add_vline(x=mu, line_dash='dash', line_color='crimson', line_width=1.2)
                         fig4.update_layout(title=f'T+{h} IC 分布', height=250,
                             margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
                         st.plotly_chart(fig4, use_container_width=True, key=f'hist_{name}_{h}')
