@@ -86,29 +86,33 @@ if names and os.path.exists(csv_path):
             icir_cols = sorted([c for c in row.index if c.startswith('icir_T')],
                                key=lambda x: int(x.split('_T')[1]))
 
-            if ic_mean_cols:
-                cols = st.columns(len(ic_mean_cols))
-                for i, c in enumerate(ic_mean_cols):
-                    h = c.split('_T')[1]
-                    cols[i].metric(f'IC均值(T{h})', f"{row[c]:.4f}" if not na(row.get(c)) else '-')
-            if icir_cols:
-                cols = st.columns(len(icir_cols))
-                for i, c in enumerate(icir_cols):
-                    h = c.split('_T')[1]
-                    cols[i].metric(f'ICIR(T{h})', f"{row[c]:.4f}" if not na(row.get(c)) else '-')
+            def _small_metric(col, label, value):
+                col.markdown(f'<p style="font-size:12px;margin:0;color:#666">{label}<br>'
+                             f'<strong style="font-size:18px;color:#222">{value}</strong></p>',
+                             unsafe_allow_html=True)
 
-            # 胜率、峰度等
-            extra = []
+            # 收集所有指标到一行
+            all_items = []
+            for c in ic_mean_cols:
+                h = c.split('_T')[1]
+                v = f"{row[c]:.4f}" if not na(row.get(c)) else '-'
+                all_items.append((f'IC均值(T{h})', v))
+            for c in icir_cols:
+                h = c.split('_T')[1]
+                v = f"{row[c]:.4f}" if not na(row.get(c)) else '-'
+                all_items.append((f'ICIR(T{h})', v))
             if not na(row.get('long_win')):
-                extra.append(('多头胜率', f"{row['long_win']:.1f}%"))
+                all_items.append(('多头胜率', f"{row['long_win']:.1f}%"))
             if not na(row.get('short_win')):
-                extra.append(('空头胜率', f"{row['short_win']:.1f}%"))
+                all_items.append(('空头胜率', f"{row['short_win']:.1f}%"))
             if not na(row.get('kurtosis')):
-                extra.append(('超额峰度', f"{row['kurtosis']:.2f}"))
-            if extra:
-                cols = st.columns(len(extra))
-                for i, (label, val) in enumerate(extra):
-                    cols[i].metric(label, val)
+                all_items.append(('超额峰度', f"{row['kurtosis']:.2f}"))
+
+            cols = st.columns(len(all_items))
+            for i, (label, val) in enumerate(all_items):
+                _small_metric(cols[i], label, val)
+
+            st.write('')  # 和图之间的空白
 
         import plotly.graph_objects as go
         cat_map = dict(zip(factor_df['factor'], factor_df['cat']))
@@ -162,13 +166,18 @@ if names and os.path.exists(csv_path):
                         st.image(ret_png, caption=f'{name} 多空收益', use_container_width=True)
 
         st.subheader('牛熊对比')
-        periods = factor_df[factor_df['period'] != 'full'][['period', 'ic_mean_T1', 'icir_T1', 'long_win', 'short_win']].copy()
+        ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_mean_T')],
+                         key=lambda x: int(x.split('_T')[1]))
+        ir_cols = sorted([c for c in factor_df.columns if c.startswith('icir_T')],
+                         key=lambda x: int(x.split('_T')[1]))
+        extra_cols = [c for c in ['long_win', 'short_win'] if c in factor_df.columns]
+        cols = ['period'] + ic_cols + ir_cols + extra_cols
+        periods = factor_df[factor_df['period'] != 'full'][cols].copy()
         if not periods.empty:
-            periods = periods.rename(columns={
-                'period': '区间', 'ic_mean_T1': 'IC均值', 'icir_T1': 'ICIR',
-                'long_win': '多头胜率', 'short_win': '空头胜率',
-            })
-            for c in ['多头胜率', '空头胜率']:
+            periods = periods.rename(columns={'period': '区间'})
+            for c in ['long_win', 'short_win']:
                 if c in periods.columns:
                     periods[c] = periods[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
-            st.dataframe(periods, hide_index=True)
+            st.dataframe(periods, hide_index=True,
+                         column_config={c: st.column_config.TextColumn(c, alignment='center')
+                                        for c in periods.columns})
