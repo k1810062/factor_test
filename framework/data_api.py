@@ -55,11 +55,17 @@ class DataAPI:
         return self._conn.sql(sql).df()
 
     def table(self, name, columns=None):
-        """取一张表为 DataFrame。"""
+        """取一张表为 DataFrame。每次重新创建 view 以同步 schema。"""
         safe = self._resolve(name)
         path = self._tables[safe]
 
         if self._backend == 'duckdb':
+            # 重新创建 view 确保 schema 最新（parquet 可能已更新）
+            if os.path.exists(path):
+                self._conn.execute(
+                    f'CREATE OR REPLACE VIEW "{safe}" AS '
+                    f"SELECT * FROM read_parquet('{os.path.abspath(path)}')"
+                )
             cols = ', '.join(f'"{c}"' for c in columns) if columns else '*'
             return self._conn.sql(f'SELECT {cols} FROM "{safe}"').df()
         else:

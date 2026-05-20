@@ -2,17 +2,10 @@
 
 import json
 import os
-import time
 import shutil
 import glob
 import pandas as pd
-from framework.registry import get_factors, get_metrics
-
-
-def load_config():
-    path = 'config/config.json'
-    with open(path) as f:
-        return json.load(f)
+from framework.registry import get_metrics
 
 
 def _get_overwrite(cfg, factor_type, col):
@@ -21,22 +14,18 @@ def _get_overwrite(cfg, factor_type, col):
 
 
 def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
-    """
-    对所有因子运行配置中的评价指标。
-    替代 analysis_base.run_analysis() + analyze_all.py。
-    """
+    """对所有因子运行配置中的评价指标（串行）。"""
     out_dir = 'output'
     analysis_dir = f'{out_dir}/factor_analysis'
 
-    # 获取配置中的因子
     src = cfg.get(factor_type) or cfg.get(f'{factor_type}_factors', {})
     factors = [(k, v['label'], v['cat']) for k, v in src.items()]
     if not factors:
         return
 
-    # 获取配置中的评价指标
-    metrics = get_metrics()
-    analysis_list = cfg.get('analysis', [])
+    meta = get_metrics().get(check_subdir)
+    if meta is None:
+        return
 
     # 全局覆盖
     global_ow = cfg.get('analysis_overwrite', [])
@@ -59,13 +48,11 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
     print(f'开始分析，共 {len(factors)} 个因子\n')
     for col, cn, cat in factors:
         factor_dir = f'{analysis_dir}/{cat}/{col}'
-        meta = metrics.get(check_subdir)
-        if meta is None:
-            continue
         if _skip_factor(factor_dir, col):
             print(f'  [{col}] 已分析，跳过')
             continue
         meta.fn(df, col, cn, cat, factor_dir)
+        print(f'  [{col}] 完成')
 
     # ---- 子区间分析 ----
     sp = cfg.get('sub_period', {})
@@ -111,12 +98,10 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
         print(f'\n=== 子区间分析：{suffix} ===')
         for col, cn, cat in factors:
             factor_dir = f'{sub_dir}/{cat}/{col}'
-            meta = metrics.get(check_subdir)
-            if meta is None:
-                continue
             if _skip_factor(factor_dir, col):
                 print(f'  [{col}] 已分析，跳过')
                 continue
             meta.fn(df_sub, col, cn, cat, factor_dir)
+            print(f'  [{col}] 完成')
 
     print(f'\n全部完成！结果保存在 {analysis_dir}/')
