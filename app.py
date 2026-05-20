@@ -168,19 +168,49 @@ if names and os.path.exists(csv_path):
                     if os.path.exists(ret_png):
                         st.image(ret_png, caption=f'{name} 多空收益', use_container_width=True)
 
-            # 十分组日均收益柱状图
+            # 十分组收益柱状图 + 胜率柱状图（并排）
             if os.path.exists(ret_parquet):
-                means = ret_df.mean() * 100
-                bar_colors = ['#1a9850','#91cf60','#d9ef8b','#fee08b','#fc8d59',
-                              '#ef6548','#d73027','#b30000','#7f0000','#4d0000']
-                fig3 = go.Figure()
-                fig3.add_trace(go.Bar(x=[f'D{i+1}' for i in range(10)], y=means.values,
-                    marker_color=bar_colors))
-                fig3.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
-                fig3.update_layout(title=f'{name} 十分组日均收益',
-                    xaxis_title='分组', yaxis_title='日均收益率(%)',
-                    height=300, margin=dict(l=10, r=10, t=30, b=10))
-                st.plotly_chart(fig3, use_container_width=True, key=f'bar_{name}')
+                c1, c2 = st.columns(2)
+                with c1:
+                    means = ret_df.mean() * 100
+                    bar_colors = ['#1a9850','#91cf60','#d9ef8b','#fee08b','#fc8d59',
+                                  '#ef6548','#d73027','#b30000','#7f0000','#4d0000']
+                    fig3 = go.Figure()
+                    fig3.add_trace(go.Bar(x=[f'D{i+1}' for i in range(10)], y=means.values,
+                        marker_color=bar_colors))
+                    fig3.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
+                    fig3.update_layout(title=f'{name} 十分组日均收益',
+                        xaxis_title='分组', yaxis_title='日均收益率(%)',
+                        height=300, margin=dict(l=10, r=10, t=30, b=10))
+                    st.plotly_chart(fig3, use_container_width=True, key=f'bar_{name}')
+                with c2:
+                    win_rates = (ret_df > 0).mean() * 100
+                    fig5 = go.Figure()
+                    fig5.add_trace(go.Bar(x=[f'D{i+1}' for i in range(10)], y=win_rates.values,
+                        marker_color=bar_colors))
+                    fig5.add_hline(y=50, line_dash='dash', line_color='gray', line_width=0.6)
+                    fig5.update_layout(title=f'{name} 十分组胜率',
+                        xaxis_title='分组', yaxis_title='胜率(%)', yaxis=dict(range=[0, 100]),
+                        height=300, margin=dict(l=10, r=10, t=30, b=10))
+                    st.plotly_chart(fig5, use_container_width=True, key=f'win_{name}')
+
+            # IC 分布直方图（一行4个）
+            ic_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
+            if os.path.exists(ic_parquet):
+                ic_df = pd.read_parquet(ic_parquet)
+                horizons = [c for c in ic_df.columns if c != 'TRADE_DATE']
+                cols = st.columns(len(horizons))
+                colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+                for idx, h in enumerate(horizons):
+                    with cols[idx]:
+                        vals = ic_df[h].dropna()
+                        fig4 = go.Figure()
+                        fig4.add_trace(go.Histogram(x=vals, nbinsx=40, name=f'T+{h}',
+                            marker_color=colors[idx], opacity=0.7))
+                        fig4.add_vline(x=vals.mean(), line_dash='dash', line_color='crimson', line_width=1.2)
+                        fig4.update_layout(title=f'T+{h} IC 分布', height=250,
+                            margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
+                        st.plotly_chart(fig4, use_container_width=True, key=f'hist_{name}_{h}')
 
         st.subheader('牛熊对比')
         ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_mean_T')],
