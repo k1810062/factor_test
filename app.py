@@ -23,6 +23,12 @@ def ret_5d(api):
 
 code = st.text_area('因子函数', TEMPLATE, height=300)
 
+col1, col2 = st.columns([1, 5])
+with col1:
+    force = st.checkbox('覆盖重算')
+with col2:
+    st.caption('勾选后强制重算因子值和分析；不勾选则跳过已有的')
+
 if st.button('运行'):
     with st.spinner('计算中...'):
         # 写临时文件
@@ -32,8 +38,11 @@ if st.button('运行'):
         tmp.close()
 
         # 跑 scratch
-        result = subprocess.run(
-            ['python3', 'scratch.py', tmp_path],
+        cmd = ['python3', 'scratch.py']
+        if force:
+            cmd.append('--force')
+        cmd.append(tmp_path)
+        result = subprocess.run(cmd,
             capture_output=True, text=True, cwd=os.path.dirname(__file__)
         )
         os.unlink(tmp_path)

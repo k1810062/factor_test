@@ -2,10 +2,17 @@
   "industry": {
     "ret_5d": {
       "cat": "pv",
-      "label": "5日涨幅"
+      "label": "5日涨幅",
+      "mode": "overwrite"
     }
   },
   "analysis": [
+    "charts",
+    "ic",
+    "rr",
+    "sig"
+  ],
+  "analysis_overwrite": [
     "charts",
     "ic",
     "rr",
