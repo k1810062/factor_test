@@ -1,11 +1,6 @@
 """分析统一入口。自动对所有因子类型运行配置的分析。"""
 import json
-from runner import load_data
-from analysis_base import run_analysis
-from analyze_factors import chart_fn
-from analyze_factor_ic import ic_ret_fn
-from analyze_factor_rr import rr_fn
-from analyze_factor_sig import sig_fn
+from analysis import load_data, run_analysis, chart_fn, ic_ret_fn, rr_fn, sig_fn
 
 FUNCTIONS = {
     'charts': chart_fn,

@@ -3,7 +3,7 @@
 只计算选中的因子，跳过未选的。
 """
 import pandas as pd
-import json, sys, time, runpy, glob, shutil
+import json, time, runpy, glob, shutil
 
 out_dir = 'output/data_processed'
 analysis_dir = 'output/factor_analysis'
@@ -22,7 +22,7 @@ def _try_read(path):
 
 def compute_industry_factors(cfg):
     """按配置计算行业因子（增量追加，不覆盖旧列）。"""
-    from factors_registry import FACTOR_FUNCTIONS
+    from industry.factors_registry import FACTOR_FUNCTIONS
     selected = cfg.get('industry_factors', {})
     if not selected:
         return None
@@ -69,7 +69,7 @@ def compute_industry_factors(cfg):
         return result
 
     print(f'  需计算: {to_compute}')
-    from factors_registry import FACTOR_FUNCTIONS
+    from industry.factors_registry import FACTOR_FUNCTIONS
 
     for name in to_compute:
         fn = FACTOR_FUNCTIONS.get(name)
@@ -104,7 +104,7 @@ def compute_zscore():
 
 def compute_monthly_factors(cfg):
     """按配置计算月度因子（增量追加）。"""
-    from factors_registry import FACTOR_FUNCTIONS
+    from industry.factors_registry import FACTOR_FUNCTIONS
     selected = cfg.get('monthly_factors', {})
     if not selected:
         return None
@@ -114,7 +114,7 @@ def compute_monthly_factors(cfg):
 
     if result is None:
         print('=== 月度因子计算（首次）===\n')
-        from factors_registry import base_monthly
+        from industry.factors_registry import base_monthly
         result = base_monthly(out_dir)
         ind_map = pd.read_parquet(f'{out_dir}/factor_stock.parquet',
                                    columns=['industry_code', 'industry'])
@@ -175,10 +175,6 @@ def run_analysis(cfg):
     analysis = cfg.get('analysis', [])
     base = __file__.rsplit('/', 2)[0]  # factor_system 目录
 
-    # 确保 analysis/ 在 sys.path 中，满足各脚本的 from analysis_base import ...
-    analysis_dir = f'{base}/analysis'
-    if analysis_dir not in sys.path:
-        sys.path.insert(0, analysis_dir)
 
     if analysis:
         runpy.run_path(f'{base}/analysis/analyze_all.py', run_name='__main__')

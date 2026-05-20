@@ -33,11 +33,11 @@ def calc_rank_ic(df, factor_col, ret_col):
 def calc_decile_rets(df, col):
     dates, rets = [], []
     for date, grp in df.groupby('TRADE_DATE'):
-        grp = grp.dropna(subset=[col, 'ret_t1'])
+        grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15: continue
         grp = grp.copy()
         grp['decile'] = pd.qcut(grp[col].rank(method='first'), 10, labels=False)
-        rets.append(grp.groupby('decile')['ret_t1'].mean().values)
+        rets.append(grp.groupby('decile')['ret_T1'].mean().values)
         dates.append(date)
     return pd.DataFrame(rets, index=pd.to_datetime(dates, format='%Y%m%d'))
 

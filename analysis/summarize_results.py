@@ -132,10 +132,18 @@ def scan_factors():
 
 def main():
     cfg = load_config()
-    factors = scan_factors()
     periods = get_periods(cfg)
+    out_path = f'{OUT_DIR}/result/factor_summary.csv'
 
-    rows = []
+    # 读已有汇总表（如果存在）
+    old_rows = {}
+    if os.path.exists(out_path):
+        old_df = pd.read_csv(out_path)
+        for _, row in old_df.iterrows():
+            old_rows[(row['factor'], row['period'])] = row.to_dict()
+
+    # 读分析文件，更新或追加
+    factors = scan_factors()
     for col, label, cat in factors:
         for period_name, base_path in periods:
             factor_dir = f'{base_path}/{cat}/{col}'
@@ -144,19 +152,34 @@ def main():
             row.update(read_rr(factor_dir, col))
             row.update(read_sig(factor_dir, col))
             row.update(read_ret(factor_dir, col))
-            # 跳过全空行（如无数据的 consolidate）
-            if len(row) <= 4:
+            key = (col, period_name)
+            if len(row) > 4:  # 分析文件存在
+                old_rows[key] = row
+            elif key not in old_rows:  # 无数据且历史上也没有
                 continue
-            rows.append(row)
+            # 否则保留历史数据
 
-    if not rows:
+    if not old_rows:
         print('无汇总数据')
         return
 
-    df = pd.DataFrame(rows)
-    # 月度因子排在最后
-    df['_sort'] = df['cat'].map({'monthly': 1}).fillna(0)
-    df = df.sort_values(['_sort', 'cat', 'factor', 'period']).drop(columns=['_sort'])
+    df = pd.DataFrame(list(old_rows.values()))
+    # 行列排序
+    cat_order = {'pv': 0, 'fund': 1, 'ind': 2, 'monthly': 3}
+    per_order = {'full': 0, 'bull': 1, 'bear': 2}
+    df['_co'] = df['cat'].map(cat_order).fillna(9)
+    df['_po'] = df['period'].map(per_order).fillna(9)
+    df = df.sort_values(['_co', 'factor', '_po']).drop(columns=['_co', '_po'])
+
+    # 固定列顺序
+    col_order = ['factor', 'label', 'cat', 'period',
+                 'ic_mean_T1', 'icir_T1', 'ic_mean_T5', 'icir_T5',
+                 'ic_mean_T10', 'icir_T10', 'ic_mean_T22', 'icir_T22',
+                 'long_win', 'short_win', 'long_odds', 'short_odds',
+                 'ret_D1', 'ret_D10', 'ret_spread',
+                 'kurtosis', 'acf1_mean', 'acf1_std']
+    df = df[[c for c in col_order if c in df.columns]]
+
     # 胜率转百分数，其余数值保留四位小数
     pct_cols = {'long_win', 'short_win'}
     for c in df.columns:

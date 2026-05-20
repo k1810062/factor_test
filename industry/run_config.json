@@ -1,35 +1,14 @@
 {
   "industry_factors": {
     "up_ratio": {"cat": "pv", "label": "上涨家数占比"},
-    "strong_ratio": {"cat": "pv", "label": "强势股占比"},
-    "vol_ratio": {"cat": "pv", "label": "强势量能占比"},
-    "ma8_pos_avg": {"cat": "pv", "label": "八均线状态占比"},
-    "ma_bull": {"cat": "pv", "label": "多头均线占比"},
-    "ma_bear": {"cat": "pv", "label": "空头均线占比"},
-    "strong_fund_ratio": {"cat": "pv", "label": "强势股资金占比"},
-    "margin_sum5": {"cat": "fund", "label": "区间融资净买入"},
-    "etf_inflow_st": {"cat": "fund", "label": "板块相关ETF净流入"},
-    "amt_divg": {"cat": "ind", "label": "成交占比乖离率"},
-    "tech_sync_rt": {"cat": "ind", "label": "技术协同度"},
-    "break_cons_rt": {"cat": "ind", "label": "突破一致性"},
-    "turn_pctl": {"cat": "ind", "label": "换手率分位数"},
-    "diverge_5d": {"cat": "ind", "label": "主力资金背离度"},
-    "margin_dir": {"cat": "ind", "label": "融资盘方向"},
-    "pb_disp": {"cat": "ind", "label": "估值离散度"},
-    "ret_divg": {"cat": "ind", "label": "涨幅分化度"},
-    "mom_12m": {"cat": "ind", "label": "动量因子"}
+    "strong_fund_ratio": {"cat": "pv", "label": "强势股资金占比"}
   },
-  "monthly_factors": {
-    "roe_pctl": {"cat": "monthly", "label": "盈利景气度"},
-    "upg_cnt_rt": {"cat": "monthly", "label": "分析师上调比例（数量）"},
-    "upg_mv_rt": {"cat": "monthly", "label": "分析师上调比例（市值）"}
-  },
+  "monthly_factors": {},
   "analysis": [
     "charts",
     "ic",
     "rr",
-    "sig",
-    "monthly"
+    "sig"
   ],
   "sub_period": {
     "from_file": "data/market_periods.json",
