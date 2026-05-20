@@ -5,12 +5,19 @@
 
 import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
+from streamlit_code_editor import code_editor
 
 BASE = os.path.dirname(__file__)
 sys.path.insert(0, BASE)
 
 st.set_page_config(page_title='因子测试', layout='wide')
 st.title('因子测试')
+
+st.markdown("""
+<style>
+    .stTextArea textarea { font-size: 12px !important; }
+</style>
+""", unsafe_allow_html=True)
 
 
 csv_path = os.path.join(BASE, 'output/result/factor_summary.csv')
@@ -28,7 +35,8 @@ def ret_5d(api):
 col_left, col_right = st.columns(2)
 
 with col_left:
-    code = st.text_area('因子函数', TEMPLATE, height=420, label_visibility='collapsed')
+    result = code_editor(TEMPLATE, lang='python', height=420, key='code_editor')
+    code = result['text']
     c1, c2 = st.columns(2)
     with c1:
         force = st.checkbox('覆盖重算')
