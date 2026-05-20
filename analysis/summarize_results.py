@@ -62,37 +62,59 @@ def read_ic(factor_dir, col):
 
 
 def read_rr(factor_dir, col):
-    """解析 RR 文本，返回胜率和尾部赔率。"""
+    """解析 RR 文本，返回胜率和尾部赔率。兼容新旧格式。"""
     path = f'{factor_dir}/rr/{col}_rr.txt'
     if not os.path.exists(path):
         return {}
     text = open(path).read()
     result = {}
-    m = re.search(r'胜率\s+([\d.]+)\s+([\d.]+)', text)
+    # 新格式：多头胜率: 48.51% / 空头胜率: 51.97%
+    m = re.search(r'多头胜率:\s+([\d.-]+)%', text)
     if m:
-        result['long_win'] = float(m.group(1))
-        result['short_win'] = float(m.group(2))
-    m = re.search(r'尾部赔率\s+([\d.]+)\s+([\d.]+)', text)
+        result['long_win'] = float(m.group(1)) / 100
+    m = re.search(r'空头胜率:\s+([\d.-]+)%', text)
+    if m:
+        result['short_win'] = float(m.group(1)) / 100
+    m = re.search(r'多头尾赔率:\s+([\d.-]+)', text)
     if m:
         result['long_odds'] = float(m.group(1))
-        result['short_odds'] = float(m.group(2))
+    m = re.search(r'空头尾赔率:\s+([\d.-]+)', text)
+    if m:
+        result['short_odds'] = float(m.group(1))
+    # 旧格式：表格形式
+    if 'long_win' not in result:
+        m = re.search(r'胜率\s+([\d.]+)\s+([\d.]+)', text)
+        if m:
+            result['long_win'] = float(m.group(1))
+            result['short_win'] = float(m.group(2))
+        m = re.search(r'尾部赔率\s+([\d.]+)\s+([\d.]+)', text)
+        if m:
+            result['long_odds'] = float(m.group(1))
+            result['short_odds'] = float(m.group(2))
     return result
 
 
 def read_sig(factor_dir, col):
-    """解析 SIG 文本，返回峰度和 ACF。"""
+    """解析 SIG 文本，返回峰度和 ACF。兼容新旧格式。"""
     path = f'{factor_dir}/sig/{col}_sig.txt'
     if not os.path.exists(path):
         return {}
     text = open(path).read()
     result = {}
-    m = re.search(r'峰度 \(超额\):\s+([\d.-]+)', text)
+    # 新格式：超额峰度: 10.1266  旧格式：峰度 (超额): 2.332
+    m = re.search(r'超额峰度:\s+([\d.-]+)', text)
     if m:
         result['kurtosis'] = float(m.group(1))
+    if 'kurtosis' not in result:
+        m = re.search(r'峰度 \(超额\):\s+([\d.-]+)', text)
+        if m:
+            result['kurtosis'] = float(m.group(1))
     m = re.search(r'ACF\(1\) 均值:\s+([\d.-]+)', text)
     if m:
         result['acf1_mean'] = float(m.group(1))
-    m = re.search(r'标准差:\s+([\d.-]+)', text)
+    m = re.search(r'ACF\(1\) 标准差:\s+([\d.-]+)', text)
+    if not m:
+        m = re.search(r'标准差:\s+([\d.-]+)', text)
     if m:
         result['acf1_std'] = float(m.group(1))
     return result

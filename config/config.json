@@ -1,6 +1,6 @@
 {
   "industry": {
-    "pct_5d": {
+    "ret_5d": {
       "cat": "pv",
       "label": "5日涨幅"
     }
