@@ -31,7 +31,6 @@
     "mom_12m": {"cat": "ind", "label": "动量因子"}
   },
   "monthly": {
-    "ret_T1": {"cat": "monthly", "label": "次月收益率"},
     "upg_cnt_rt": {"cat": "monthly", "label": "上调数量占比"},
     "upg_mv_rt": {"cat": "monthly", "label": "上调市值占比"},
     "roe_pctl": {"cat": "monthly", "label": "盈利景气度"},
