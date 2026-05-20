@@ -5,7 +5,7 @@
 
 import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
-from streamlit_code_editor import code_editor
+from code_editor import code_editor
 
 BASE = os.path.dirname(__file__)
 sys.path.insert(0, BASE)
@@ -35,8 +35,9 @@ def ret_5d(api):
 col_left, col_right = st.columns(2)
 
 with col_left:
-    result = code_editor(TEMPLATE, lang='python', height=420, key='code_editor')
-    code = result['text']
+    result = code_editor(TEMPLATE, lang='python', height=380, key='code_editor',
+                         options={'showInvisibles': False, 'minimap': {'enabled': False}})
+    code = result.get('text') or TEMPLATE
     c1, c2 = st.columns(2)
     with c1:
         force = st.checkbox('覆盖重算')
@@ -45,7 +46,8 @@ with col_left:
 
 with col_right:
     log_text = st.session_state.get('log', '')
-    st.text_area('运行日志', log_text, height=420, label_visibility='collapsed', disabled=True)
+    st.text_area('运行日志', log_text, height=380, label_visibility='collapsed', disabled=True)
+    st.write('')  # 垫高与左侧按钮行对齐
 
 # ---- 运行流程 ----
 if run:

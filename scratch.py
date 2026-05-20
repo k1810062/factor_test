@@ -27,6 +27,12 @@ def main():
         r"@factor\(name='(\w+)',\s*category='(\w+)',\s*label='(.+?)',\s*domain='(\w+)'",
         code)
 
+    if not factors:
+        print('错误：未识别到 @factor 装饰器')
+        print('文件内容:')
+        print(code[:500])
+        sys.exit(1)
+
     # 追加到因子库
     target = FACTOR_FILES.get(factors[0][3], FACTOR_FILES['industry'])
     existing = open(target).read()
