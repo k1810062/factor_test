@@ -1,8 +1,0 @@
-pandas
-numpy
-duckdb
-scipy
-matplotlib
-plotly
-streamlit
-streamlit-code-editor
