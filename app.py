@@ -116,6 +116,12 @@ if os.path.exists(csv_path):
                 idx = event.selection.rows[0]
                 selected_name = matched.iloc[idx]['factor']
                 st.session_state.last_names = [selected_name]
+                st.components.v1.html("""
+                <script>
+                    var el = document.getElementById('metrics-anchor');
+                    if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+                </script>
+                """, height=0)
         else:
             st.caption(f'未找到含 "{q}" 的因子')
 
@@ -129,6 +135,7 @@ if names and os.path.exists(csv_path):
     na = pd.isna
 
     if not factor_df.empty:
+        st.markdown('<div id="metrics-anchor"></div>', unsafe_allow_html=True)
         st.subheader('因子评价')
 
         full = factor_df[factor_df['period'] == 'full']
