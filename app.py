@@ -116,13 +116,12 @@ if os.path.exists(csv_path):
                 idx = event.selection.rows[0]
                 selected_name = matched.iloc[idx]['factor']
                 st.session_state.last_names = [selected_name]
-                st.markdown("""
-                <img src="x" onerror="setTimeout(function(){document.getElementById('metrics-anchor').scrollIntoView({behavior:'smooth'})},100)" style="display:none">
-                """, unsafe_allow_html=True)
+                st.session_state.should_scroll = True
         else:
             st.caption(f'未找到含 "{q}" 的因子')
 
     st.divider()
+    st.markdown('<div id="factor-metrics" style="scroll-margin-top:30px"></div>', unsafe_allow_html=True)
 
 # ---- 显示结果 ----
 names = st.session_state.get('last_names', [])
@@ -132,7 +131,6 @@ if names and os.path.exists(csv_path):
     na = pd.isna
 
     if not factor_df.empty:
-        st.markdown('<div id="metrics-anchor"></div>', unsafe_allow_html=True)
         st.subheader('因子评价')
 
         full = factor_df[factor_df['period'] == 'full']
@@ -299,3 +297,10 @@ if names and os.path.exists(csv_path):
             html = html.replace('<th>', '<th style="text-align:center">')
             html = html.replace('<td>', '<td style="text-align:center">')
             st.markdown(html, unsafe_allow_html=True)
+
+            if st.session_state.pop('should_scroll', False):
+                st.components.v1.html("""
+                <script>parent.document.getElementById('factor-metrics').scrollIntoView({behavior:'smooth',block:'start'})</script>
+                <span>"""+str(hash(str(st.session_state.get('_sc',0))))+"""</span>
+                """, height=0)
+                st.session_state._sc = st.session_state.get('_sc',0) + 1
