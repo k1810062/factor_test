@@ -51,11 +51,11 @@ if os.path.exists(csv_path):
                 q = st.text_input('🔍 搜索因子', placeholder='输入因子名、中文名或分类...',
                                  label_visibility='collapsed', key='search_input')
             with cols[1]:
-                submitted = st.form_submit_button('搜索', use_container_width=True)
+                submitted = st.form_submit_button('搜索', width='stretch')
                 if submitted:
                     st.session_state.mode = 'search'
     with c2:
-        if st.button('因子列表', use_container_width=True):
+        if st.button('因子列表', width='stretch'):
             st.session_state.mode = 'list'
 
     mode = st.session_state.get('mode', '')
@@ -75,7 +75,7 @@ if os.path.exists(csv_path):
             for c in ['多头胜率']:
                 if c in show.columns:
                     show[c] = show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
-            event = st.dataframe(show, hide_index=True, use_container_width=True,
+            event = st.dataframe(show, hide_index=True, width='stretch',
                                  column_config={c: st.column_config.TextColumn(c, alignment='center') for c in show.columns},
                                  on_select='rerun', selection_mode='single-row',
                                  key=f'search_tbl_{st.session_state.get("search_key", "")}')
@@ -96,7 +96,7 @@ if os.path.exists(csv_path):
             if c in all_show.columns:
                 all_show[c] = all_show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
         st.caption(f'因子列表  共 {all_show["因子名"].nunique()} 个因子')
-        ev = st.dataframe(all_show, hide_index=True, use_container_width=True, height=400,
+        ev = st.dataframe(all_show, hide_index=True, width='stretch', height=400,
                          column_config={c: st.column_config.TextColumn(c, alignment='center') for c in all_show.columns},
                          on_select='rerun', selection_mode='single-row',
                          key=f'all_tbl_{st.session_state.get("search_key", "")}')
@@ -119,7 +119,7 @@ with col_left:
     with c1:
         force = st.checkbox('覆盖重算')
     with c2:
-        run = st.button('运行', use_container_width=True)
+        run = st.button('运行', width='stretch')
 
 with col_right:
     st.caption('运行日志')
@@ -255,11 +255,11 @@ if names and os.path.exists(csv_path):
                     fig.update_layout(title=f'{name} 累计 Rank IC',
                         hovermode='x unified', height=300,
                         margin=dict(l=10, r=10, t=30, b=10), showlegend=True)
-                    st.plotly_chart(fig, use_container_width=True, key=f'ic_{name}')
+                    st.plotly_chart(fig, width='stretch', key=f'ic_{name}')
                 else:
                     ic_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/ic_cum.png')
                     if os.path.exists(ic_png):
-                        st.image(ic_png, caption=f'{name} 累计 IC', use_container_width=True)
+                        st.image(ic_png, caption=f'{name} 累计 IC', width='stretch')
             with c2:
                 ret_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/{name}_decile_rets.parquet')
                 if os.path.exists(ret_parquet):
@@ -276,11 +276,11 @@ if names and os.path.exists(csv_path):
                     fig2.update_layout(title=f'{name} 多空收益',
                         hovermode='x unified', height=300,
                         margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig2, use_container_width=True, key=f'ret_{name}')
+                    st.plotly_chart(fig2, width='stretch', key=f'ret_{name}')
                 else:
                     ret_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/ret_long_short.png')
                     if os.path.exists(ret_png):
-                        st.image(ret_png, caption=f'{name} 多空收益', use_container_width=True)
+                        st.image(ret_png, caption=f'{name} 多空收益', width='stretch')
 
             # 十分组收益柱状图 + 胜率柱状图（并排）
             if os.path.exists(ret_parquet):
@@ -296,7 +296,7 @@ if names and os.path.exists(csv_path):
                     fig3.update_layout(title=f'{name} 十分组日均收益',
                         xaxis_title='分组', yaxis_title='日均收益率(%)',
                         height=300, margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig3, use_container_width=True, key=f'bar_{name}')
+                    st.plotly_chart(fig3, width='stretch', key=f'bar_{name}')
                 with c2:
                     win_rates = (ret_df > 0).mean() * 100
                     fig5 = go.Figure()
@@ -306,7 +306,7 @@ if names and os.path.exists(csv_path):
                     fig5.update_layout(title=f'{name} 十分组胜率',
                         xaxis_title='分组', yaxis_title='胜率(%)', yaxis=dict(range=[0, 100]),
                         height=300, margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig5, use_container_width=True, key=f'win_{name}')
+                    st.plotly_chart(fig5, width='stretch', key=f'win_{name}')
 
             # IC 分布直方图（一行4个）
             ic_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
@@ -328,7 +328,7 @@ if names and os.path.exists(csv_path):
                         fig4.add_vline(x=mu, line_dash='dash', line_color='crimson', line_width=1.2)
                         fig4.update_layout(title=f'T+{h} IC 分布', height=250,
                             margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
-                        st.plotly_chart(fig4, use_container_width=True, key=f'hist_{name}_{h}')
+                        st.plotly_chart(fig4, width='stretch', key=f'hist_{name}_{h}')
 
         st.subheader('牛熊对比')
         ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_mean_T')],
@@ -358,8 +358,6 @@ if names and os.path.exists(csv_path):
             st.markdown(html, unsafe_allow_html=True)
 
             if st.session_state.pop('should_scroll', False):
-                st.components.v1.html("""
-                <script>parent.document.getElementById('factor-metrics').scrollIntoView({behavior:'smooth',block:'start'})</script>
-                <span>"""+str(hash(str(st.session_state.get('_sc',0))))+"""</span>
-                """, height=0)
-                st.session_state._sc = st.session_state.get('_sc',0) + 1
+                st.html("""
+                <script>document.getElementById('factor-metrics').scrollIntoView({behavior:'smooth',block:'start'})</script>
+                """, unsafe_allow_javascript=True)

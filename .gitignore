@@ -1,5 +1,6 @@
-output/
+.venv/
 __pycache__/
 *.pyc
 .DS_Store
-data/stock_base.parquet
+output/
+data/
