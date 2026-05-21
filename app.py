@@ -17,6 +17,8 @@ st.title('因子测试')
 st.markdown("""
 <style>
     textarea[aria-label="运行日志"] { font-size: 12px !important; }
+    [data-testid="stDataFrame"] td { text-align: center !important; }
+    [data-testid="stDataFrame"] th { text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
