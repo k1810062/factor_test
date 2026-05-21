@@ -44,8 +44,14 @@ def main():
             f.write('\n\n# ─── 新增草稿因子 ───\n' + code.strip() + '\n')
         print(f'  [{name}] → 已加入因子库')
 
-    # 改配置只留新因子
-    cfg = {domain: {} for _, _, _, domain in factors}
+    # 读现有配置，保留基础设施，改写因子部分
+    old_cfg = json.load(open(CONFIG_PATH)) if os.path.exists(CONFIG_PATH) else {}
+    cfg = {}
+    for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir'):
+        if k in old_cfg:
+            cfg[k] = old_cfg[k]
+    for domain in {d for _, _, _, d in factors}:
+        cfg[domain] = {}
     for name, cat, label, domain in factors:
         mode = 'overwrite' if '--force' in sys.argv else 'skip'
         cfg[domain][name] = {'cat': cat, 'label': label, 'mode': mode}
@@ -60,7 +66,7 @@ def main():
 
     # 跑 Pipeline
     print('\n=== 运行 Pipeline ===')
-    from framework.pipeline import Pipeline
+    from factor_workbench.pipeline import Pipeline
     p = Pipeline(CONFIG_PATH, backend='duckdb')
     try:
         p.run()

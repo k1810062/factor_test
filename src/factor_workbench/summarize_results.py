@@ -2,8 +2,14 @@
 import pandas as pd
 import json, os, re, glob
 
-OUT_DIR = 'output'
-DATA_DIR = 'output/data_processed'
+def _output_dir():
+    """从配置文件读输出目录，没有则默认 'output'。"""
+    try:
+        cfg = load_config()
+        analysis_dir = cfg.get('analysis_dir', 'output/factor_analysis')
+        return os.path.dirname(analysis_dir)
+    except Exception:
+        return 'output'
 
 
 def load_config():
@@ -16,14 +22,14 @@ def load_config():
 
 def get_periods(cfg):
     """返回 [(周期名, 分析目录), ...]"""
-    periods = [('full', f'{OUT_DIR}/factor_analysis')]
+    periods = [('full', f'{_output_dir()}/factor_analysis')]
     sp = cfg.get('sub_period', {})
     if 'from_file' in sp:
         ext = json.load(open(sp['from_file']))
         names = sp.get('groups', list(ext.keys()))
         for name in names:
             suffix = ext[name]['suffix']
-            periods.append((suffix, f'{OUT_DIR}/factor_analysis_{suffix}'))
+            periods.append((suffix, f'{_output_dir()}/factor_analysis_{suffix}'))
     return periods
 
 
@@ -147,10 +153,10 @@ def _parse_label(factor_dir, col):
 def scan_factors():
     """扫描分析目录，所有有分析结果的因子全纳入。"""
     factors = set()
-    for ic_file in glob.glob(f'{OUT_DIR}/factor_analysis/*/*/ic/*_ic.txt'):
+    for ic_file in glob.glob(f'{_output_dir()}/factor_analysis/*/*/ic/*_ic.txt'):
         col = os.path.basename(ic_file).replace('_ic.txt', '')
         cat = ic_file.split('/')[-4]
-        factor_dir = f'{OUT_DIR}/factor_analysis/{cat}/{col}'
+        factor_dir = f'{_output_dir()}/factor_analysis/{cat}/{col}'
         label = _parse_label(factor_dir, col)
         factors.add((col, label, cat))
     return list(factors)
@@ -159,7 +165,7 @@ def scan_factors():
 def main():
     cfg = load_config()
     periods = get_periods(cfg)
-    out_path = f'{OUT_DIR}/result/factor_summary.csv'
+    out_path = f'{_output_dir()}/result/factor_summary.csv'
 
     # 读已有汇总表（如果存在）
     old_rows = {}
@@ -214,8 +220,8 @@ def main():
         if c in pct_cols:
             df[c] = df[c] * 100
         df[c] = df[c].round(4)
-    os.makedirs(f'{OUT_DIR}/result', exist_ok=True)
-    out_path = f'{OUT_DIR}/result/factor_summary.csv'
+    os.makedirs(f'{_output_dir()}/result', exist_ok=True)
+    out_path = f'{_output_dir()}/result/factor_summary.csv'
     df.to_csv(out_path, index=False, float_format='%.4f', encoding='utf-8-sig')
     print(f'汇总表保存: {len(df)} 行, {len(df.columns)} 列 → {out_path}')
 

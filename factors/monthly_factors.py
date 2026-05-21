@@ -5,7 +5,7 @@
 
 import pandas as pd
 import numpy as np
-from framework.registry import factor
+from factor_workbench.registry import factor
 
 
 @factor(name='ret_T1', category='monthly', label='次月收益率', domain='monthly')

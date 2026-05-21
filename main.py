@@ -1,6 +1,6 @@
 """主入口。通过框架 pipeline 运行因子计算和分析。"""
 
-from framework.pipeline import Pipeline
+from factor_workbench.pipeline import Pipeline
 
 
 def main():

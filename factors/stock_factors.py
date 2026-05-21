@@ -5,7 +5,7 @@
 
 import pandas as pd
 import numpy as np
-from framework.registry import factor
+from factor_workbench.registry import factor
 
 
 def _fib_ma(df, n):

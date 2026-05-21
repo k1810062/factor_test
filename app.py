@@ -8,7 +8,7 @@ import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
 
-from analysis.chart_renderer import (
+from factor_workbench.chart_renderer import (
     load_ic_data, load_ret_data, data_exists,
     render_ic_cumulative, render_long_short,
     render_decile_bar, render_win_rate, render_ic_distribution,
@@ -332,4 +332,6 @@ if names and os.path.exists(csv_path):
             if st.session_state.pop('should_scroll', False):
                 st.html("""
                 <script>document.getElementById('factor-metrics').scrollIntoView({behavior:'smooth',block:'start'})</script>
+                <span style="display:none">""" + str(hash(str(st.session_state.get('_sc', 0)))) + """</span>
                 """, unsafe_allow_javascript=True)
+                st.session_state._sc = st.session_state.get('_sc', 0) + 1

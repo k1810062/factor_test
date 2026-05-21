@@ -6,7 +6,7 @@
 import pandas as pd
 import numpy as np
 from math import ceil
-from framework.registry import factor
+from factor_workbench.registry import factor
 
 
 def _mapping(api):

@@ -7,7 +7,7 @@
 import pandas as pd
 import os
 
-# 默认表名 → 文件路径映射
+# 默认表名 → 文件路径映射（可被项目配置覆盖）
 DEFAULT_TABLES = {
     'stock_base':         'data/stock_base.parquet',
     'swi_daily':          'data/SWI_daily.parquet',
@@ -60,7 +60,6 @@ class DataAPI:
         path = self._tables[safe]
 
         if self._backend == 'duckdb':
-            # 重新创建 view 确保 schema 最新（parquet 可能已更新）
             if os.path.exists(path):
                 self._conn.execute(
                     f'CREATE OR REPLACE VIEW "{safe}" AS '

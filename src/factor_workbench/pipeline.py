@@ -9,31 +9,16 @@ import time
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from framework.data_api import DataAPI
-from framework.registry import get_factors
-from framework.metric_runner import run_metrics
+from .data_api import DataAPI
+from .registry import get_factors
+from .metric_runner import run_metrics
 import factors.stock_factors
 import factors.industry_factors
 import factors.monthly_factors
-import metrics.chart_metric
-import metrics.ic_metric
-import metrics.rr_metric
-import metrics.sig_metric
-
-# 各 domain 的输出路径
-OUTPUT_PATHS = {
-    'stock':    'output/data_processed/factor_stock.parquet',
-    'industry': 'output/data_processed/industry_daily_ratio.parquet',
-    'monthly':  'output/data_processed/industry_monthly_ratio.parquet',
-}
-
-# 各 domain 的 key 列
-KEY_COLS = {
-    'stock':    ['STOCK_CODE', 'TRADE_DATE'],
-    'industry': ['industry_code', 'TRADE_DATE'],
-    'monthly':  ['industry_code', 'ym'],
-}
-
+from . import chart_metric
+from . import ic_metric
+from . import rr_metric
+from . import sig_metric
 
 def _try_read(path):
     try:
@@ -46,8 +31,8 @@ def _factor_worker(domain, name, backend):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
     import importlib
     importlib.import_module(f'factors.{domain}_factors')
-    from framework.registry import get_factors
-    from framework.data_api import DataAPI
+    from factor_workbench.registry import get_factors
+    from factor_workbench.data_api import DataAPI
 
     factors = get_factors(domain=domain)
     meta = factors.get(name)
@@ -68,7 +53,7 @@ class Pipeline:
     def __init__(self, config_path, backend='duckdb'):
         self.cfg = json.load(open(config_path))
         self.backend = backend
-        self.api = DataAPI(backend=backend)
+        self.api = DataAPI(backend=backend, tables=self.cfg.get('tables'))
 
     def run(self):
         """全流程入口。"""
@@ -94,8 +79,8 @@ class Pipeline:
 
     def _compute_domain(self, domain, selected):
         """计算一个 domain 的所有选中因子。增量 + 并行。"""
-        key_cols = KEY_COLS[domain]
-        output_path = OUTPUT_PATHS[domain]
+        key_cols = self.cfg['key_cols'][domain]
+        output_path = self.cfg['output_paths'][domain]
 
         # 读已有数据
         existing = _try_read(output_path)
@@ -227,7 +212,7 @@ class Pipeline:
 
     def _run_summary(self):
         """生成汇总表。"""
-        from analysis.summarize_results import main as summary_main
+        from factor_workbench.summarize_results import main as summary_main
         summary_main()
 
     def close(self):

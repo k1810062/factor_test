@@ -1,4 +1,25 @@
 {
+  "tables": {
+    "stock_base": "data/stock_base.parquet",
+    "swi_daily": "data/SWI_daily.parquet",
+    "etf_daily": "data/etf_daily.parquet",
+    "factor_stock": "output/data_processed/factor_stock.parquet",
+    "industry_daily": "output/data_processed/industry_daily_ratio.parquet",
+    "industry_daily_z": "output/data_processed/industry_daily_ratio_z.parquet",
+    "industry_monthly": "output/data_processed/industry_monthly_ratio.parquet"
+  },
+  "output_paths": {
+    "stock": "output/data_processed/factor_stock.parquet",
+    "industry": "output/data_processed/industry_daily_ratio.parquet",
+    "monthly": "output/data_processed/industry_monthly_ratio.parquet"
+  },
+  "key_cols": {
+    "stock": ["STOCK_CODE", "TRADE_DATE"],
+    "industry": ["industry_code", "TRADE_DATE"],
+    "monthly": ["industry_code", "ym"]
+  },
+  "analysis_dir": "output/factor_analysis",
+
   "industry": {
     "ret_5d": {
       "cat": "pv",
@@ -6,18 +27,9 @@
       "mode": "skip"
     }
   },
-  "analysis": [
-    "charts",
-    "ic",
-    "rr",
-    "sig"
-  ],
+  "analysis": ["charts", "ic", "rr", "sig"],
   "sub_period": {
     "from_file": "data/market_periods.json",
-    "groups": [
-      "bull",
-      "bear",
-      "consolidate"
-    ]
+    "groups": ["bull", "bear", "consolidate"]
   }
 }

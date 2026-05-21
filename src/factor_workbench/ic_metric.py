@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import os
 from scipy.stats import spearmanr
-from framework.registry import metric
+from .registry import metric
 
 warnings.filterwarnings('ignore', message='An input array is constant')
 
