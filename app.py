@@ -17,8 +17,9 @@ st.title('因子测试')
 st.markdown("""
 <style>
     textarea[aria-label="运行日志"] { font-size: 12px !important; }
-    .stPlotlyChart { margin-top: 30px; }
-    [data-testid="stHeadingWithAction"] { margin-top: 30px !important; }
+    .stPlotlyChart { margin-top: 40px; }
+    [data-testid="stHeading"] { margin-top: 40px !important; }
+    .stDataFrame thead th { text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,20 +42,35 @@ if os.path.exists(csv_path):
     df = pd.read_csv(csv_path)
     full_period = df[df['period'] == 'full'].copy()
 
-    c1, c2 = st.columns([4, 1])
+    c1, c2, c3 = st.columns([3, 1, 1])
     with c1:
-        q = st.text_input('🔍 搜索因子', placeholder='输入因子名、中文名或分类...', label_visibility='collapsed')
+        with st.form(key='search_form', border=False):
+            cols = st.columns([3, 1])
+            with cols[0]:
+                q = st.text_input('🔍 搜索因子', placeholder='输入因子名、中文名或分类...',
+                                 label_visibility='collapsed', key='search_input')
+            with cols[1]:
+                submitted = st.form_submit_button('搜索', use_container_width=True)
+                if submitted:
+                    st.session_state.mode = 'search'
     with c2:
-        search_click = st.button('搜索', use_container_width=True)
+        pass
+    with c3:
+        if st.button('因子列表', use_container_width=True):
+            st.session_state.mode = 'list'
+
+    mode = st.session_state.get('mode', '')
     q_lower = q.lower() if q else ''
 
-    if q_lower:
+    # ---- 搜索模式 ----
+    if mode == 'search' and q_lower:
         matched = full_period[
             full_period['factor'].str.lower().str.contains(q_lower, na=False) |
             full_period['label'].str.lower().str.contains(q_lower, na=False) |
             full_period['cat'].str.lower().str.contains(q_lower, na=False)
         ]
         if not matched.empty:
+            st.caption(f'搜索列表  共 {matched["factor"].nunique()} 个因子')
             show = matched[['factor', 'label', 'cat', 'ic_mean_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
             show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
             for c in ['多头胜率']:
@@ -71,6 +87,26 @@ if os.path.exists(csv_path):
                 st.session_state.should_scroll = True
         else:
             st.caption(f'未找到含 "{q}" 的因子')
+
+    # ---- 列表模式 ----
+    if mode == 'list':
+        all_show = full_period[['factor', 'label', 'cat', 'ic_mean_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
+        all_show = all_show.sort_values('factor')
+        all_show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
+        for c in ['多头胜率']:
+            if c in all_show.columns:
+                all_show[c] = all_show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+        st.caption(f'因子列表  共 {all_show["因子名"].nunique()} 个因子')
+        ev = st.dataframe(all_show, hide_index=True, use_container_width=True, height=400,
+                         column_config={c: st.column_config.TextColumn(c, alignment='center') for c in all_show.columns},
+                         on_select='rerun', selection_mode='single-row',
+                         key=f'all_tbl_{st.session_state.get("search_key", "")}')
+        if ev and ev.selection and ev.selection.rows:
+            idx = ev.selection.rows[0]
+            _all_names = all_show['因子名'].tolist()
+            if idx < len(_all_names):
+                st.session_state.last_names = [_all_names[idx]]
+                st.session_state.should_scroll = True
 
     st.divider()
 
@@ -127,7 +163,7 @@ if st.session_state.get('pending'):
     st.session_state.last_names = re.findall(r"@factor\(name='(\w+)'", code)
     st.rerun()
 
-st.markdown('<div id="factor-metrics" style="min-height:80px"></div>', unsafe_allow_html=True)
+st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 
 # ---- 展示选中因子的函数代码 ----
 _last = st.session_state.get('last_names', [])
