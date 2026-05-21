@@ -17,6 +17,8 @@ st.title('因子测试')
 st.markdown("""
 <style>
     textarea[aria-label="运行日志"] { font-size: 12px !important; }
+    .stPlotlyChart { margin-top: 30px; }
+    [data-testid="stHeadingWithAction"] { margin-top: 30px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -193,8 +195,6 @@ if names and os.path.exists(csv_path):
             cols = st.columns(len(all_items))
             for i, (label, val) in enumerate(all_items):
                 _small_metric(cols[i], label, val)
-
-            st.divider()
 
         import plotly.graph_objects as go
         cat_map = dict(zip(factor_df['factor'], factor_df['cat']))
