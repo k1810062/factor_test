@@ -116,12 +116,9 @@ if os.path.exists(csv_path):
                 idx = event.selection.rows[0]
                 selected_name = matched.iloc[idx]['factor']
                 st.session_state.last_names = [selected_name]
-                st.components.v1.html("""
-                <script>
-                    var el = document.getElementById('metrics-anchor');
-                    if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
-                </script>
-                """, height=0)
+                st.markdown("""
+                <img src="x" onerror="setTimeout(function(){document.getElementById('metrics-anchor').scrollIntoView({behavior:'smooth'})},100)" style="display:none">
+                """, unsafe_allow_html=True)
         else:
             st.caption(f'未找到含 "{q}" 的因子')
 
