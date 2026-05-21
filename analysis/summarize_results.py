@@ -48,7 +48,7 @@ def read_ic(factor_dir, col):
     # 段落：T+1（所有因子都有）
     m = re.search(r'IC 均值:\s+([\d.-]+)', text)
     if m:
-        result['ic_mean_T1'] = float(m.group(1))
+        result['ic_T1'] = float(m.group(1))
     m = re.search(r'ICIR:\s+([\d.-]+)', text)
     if m:
         result['icir_T1'] = float(m.group(1))
@@ -56,7 +56,7 @@ def read_ic(factor_dir, col):
     for h in [5, 10, 22]:
         m = re.search(rf'T\+{h}\s+([\d.-]+)\s+[\d.-]+\s+([\d.-]+)', text)
         if m:
-            result[f'ic_mean_T{h}'] = float(m.group(1))
+            result[f'ic_T{h}'] = float(m.group(1))
             result[f'icir_T{h}'] = float(m.group(2))
     return result
 
@@ -199,8 +199,8 @@ def main():
 
     # 固定列顺序
     col_order = ['factor', 'label', 'cat', 'period',
-                 'ic_mean_T1', 'icir_T1', 'ic_mean_T5', 'icir_T5',
-                 'ic_mean_T10', 'icir_T10', 'ic_mean_T22', 'icir_T22',
+                 'ic_T1', 'icir_T1', 'ic_T5', 'icir_T5',
+                 'ic_T10', 'icir_T10', 'ic_T22', 'icir_T22',
                  'long_win', 'short_win', 'long_odds', 'short_odds',
                  'ret_D1', 'ret_D10', 'ret_spread',
                  'kurtosis', 'acf1_mean', 'acf1_std']

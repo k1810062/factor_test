@@ -8,6 +8,12 @@ import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
 
+from analysis.chart_renderer import (
+    load_ic_data, load_ret_data, data_exists,
+    render_ic_cumulative, render_long_short,
+    render_decile_bar, render_win_rate, render_ic_distribution,
+)
+
 BASE = os.path.dirname(__file__)
 sys.path.insert(0, BASE)
 
@@ -36,6 +42,40 @@ def ret_5d(api):
         WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
     """)
 '''
+
+
+def _get_factor_code(name):
+    """从因子文件提取 @factor 函数代码，返回代码字符串或 None。"""
+    for f in ['factors/industry_factors.py', 'factors/stock_factors.py', 'factors/monthly_factors.py']:
+        fp = os.path.join(BASE, f)
+        if not os.path.exists(fp):
+            continue
+        txt = open(fp).read()
+        i = txt.find(f"@factor(name='{name}'")
+        if i >= 0:
+            e = txt.find('\n@factor(', i + 1)
+            if e < 0:
+                e = txt.find('\nfrom ', i + 1)
+            if e < 0:
+                e = len(txt)
+            return txt[i:e].strip()
+    return None
+
+
+def _run_scratch(code, force=False):
+    """写临时文件 → 跑 scratch.py → 返回 (stdout, stderr)。"""
+    tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
+    tmp.write(code)
+    tmp_path = tmp.name
+    tmp.close()
+    cmd = ['python3', 'scratch.py']
+    if force:
+        cmd.append('--force')
+    cmd.append(tmp_path)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE)
+    os.unlink(tmp_path)
+    return result.stdout, result.stderr
+
 
 # ---- 因子搜索 ----
 if os.path.exists(csv_path):
@@ -70,7 +110,7 @@ if os.path.exists(csv_path):
         ]
         if not matched.empty:
             st.caption(f'搜索列表  共 {matched["factor"].nunique()} 个因子')
-            show = matched[['factor', 'label', 'cat', 'ic_mean_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
+            show = matched[['factor', 'label', 'cat', 'ic_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
             show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
             for c in ['多头胜率']:
                 if c in show.columns:
@@ -89,7 +129,7 @@ if os.path.exists(csv_path):
 
     # ---- 列表模式 ----
     if mode == 'list':
-        all_show = full_period[['factor', 'label', 'cat', 'ic_mean_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
+        all_show = full_period[['factor', 'label', 'cat', 'ic_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
         all_show = all_show.sort_values('factor')
         all_show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
         for c in ['多头胜率']:
@@ -167,19 +207,7 @@ st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 # ---- 展示选中因子的函数代码 ----
 _last = st.session_state.get('last_names', [])
 if _last and os.path.exists(csv_path):
-    _name = _last[0]
-    _found = None
-    for _f in ['factors/industry_factors.py', 'factors/stock_factors.py', 'factors/monthly_factors.py']:
-        _fp = os.path.join(BASE, _f)
-        if os.path.exists(_fp):
-            _txt = open(_fp).read()
-            _i = _txt.find(f"@factor(name='{_name}'")
-            if _i >= 0:
-                _e = _txt.find('\n@factor(', _i + 1)
-                if _e < 0:
-                    _e = len(_txt)
-                _found = _txt[_i:_e].strip()
-                break
+    _found = _get_factor_code(_last[0])
     if _found:
         st.subheader('因子函数代码')
         st.code(_found, language='python')
@@ -198,7 +226,7 @@ if names and os.path.exists(csv_path):
         if not full.empty:
             row = full.iloc[0]
             # 动态读取 CSV 中的 IC 均值和 ICIR 列
-            ic_mean_cols = sorted([c for c in row.index if c.startswith('ic_mean_T')],
+            ic_mean_cols = sorted([c for c in row.index if c.startswith('ic_T')],
                                   key=lambda x: int(x.split('_T')[1]))
             icir_cols = sorted([c for c in row.index if c.startswith('icir_T')],
                                key=lambda x: int(x.split('_T')[1]))
@@ -231,107 +259,51 @@ if names and os.path.exists(csv_path):
             for i, (label, val) in enumerate(all_items):
                 _small_metric(cols[i], label, val)
 
-        import plotly.graph_objects as go
         cat_map = dict(zip(factor_df['factor'], factor_df['cat']))
         for name in names:
             cat = cat_map.get(name)
             if not cat:
                 continue
 
+            if not data_exists(BASE, name, cat):
+                st.info(f'{name} 分析数据缺失')
+                factor_code = _get_factor_code(name)
+                if factor_code and st.button('补全数据', key=f'rebuild_{name}'):
+                    with st.spinner('计算中...'):
+                        stdout, stderr = _run_scratch(factor_code, force=True)
+                        st.session_state.log = stdout
+                        if stderr:
+                            st.session_state.log += '\n--- 错误 ---\n' + stderr
+                        st.rerun()
+                continue
+
+            ic_df = load_ic_data(BASE, name, cat)
+            ret_df = load_ret_data(BASE, name, cat)
+
             c1, c2 = st.columns(2)
             with c1:
-                ic_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
-                if os.path.exists(ic_parquet):
-                    ic_df = pd.read_parquet(ic_parquet)
-                    ic_df['TRADE_DATE'] = pd.to_datetime(ic_df['TRADE_DATE'], format='%Y%m%d')
-                    ic_df = ic_df.sort_values('TRADE_DATE').reset_index(drop=True)
-                    fig = go.Figure()
-                    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
-                    for h, color in zip([c for c in ic_df.columns if c != 'TRADE_DATE'], colors):
-                        vals = ic_df[h].dropna().cumsum()
-                        fig.add_trace(go.Scatter(x=vals.index, y=vals.values, mode='lines',
-                            name=h, line=dict(color=color, width=1.5)))
-                    fig.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
-                    fig.update_layout(title=f'{name} 累计 Rank IC',
-                        hovermode='x unified', height=300,
-                        margin=dict(l=10, r=10, t=30, b=10), showlegend=True)
-                    st.plotly_chart(fig, width='stretch', key=f'ic_{name}')
-                else:
-                    ic_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/ic_cum.png')
-                    if os.path.exists(ic_png):
-                        st.image(ic_png, caption=f'{name} 累计 IC', width='stretch')
+                st.plotly_chart(render_ic_cumulative(ic_df, name),
+                                width='stretch', key=f'ic_{name}')
             with c2:
-                ret_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/{name}_decile_rets.parquet')
-                if os.path.exists(ret_parquet):
-                    ret_df = pd.read_parquet(ret_parquet)
-                    cum = (1 + ret_df).cumprod() - 1
-                    fig2 = go.Figure()
-                    fig2.add_trace(go.Scatter(x=cum.index, y=cum[9], mode='lines',
-                        name='多头(D10)', line=dict(color='crimson', width=1.5)))
-                    fig2.add_trace(go.Scatter(x=cum.index, y=cum[0], mode='lines',
-                        name='空头(D1)', line=dict(color='steelblue', width=1.5)))
-                    fig2.add_trace(go.Scatter(x=cum.index, y=cum[9] - cum[0], mode='lines',
-                        name='多空(D10-D1)', line=dict(color='darkgreen', width=2)))
-                    fig2.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
-                    fig2.update_layout(title=f'{name} 多空收益',
-                        hovermode='x unified', height=300,
-                        margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig2, width='stretch', key=f'ret_{name}')
-                else:
-                    ret_png = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ret/ret_long_short.png')
-                    if os.path.exists(ret_png):
-                        st.image(ret_png, caption=f'{name} 多空收益', width='stretch')
+                st.plotly_chart(render_long_short(ret_df, name),
+                                width='stretch', key=f'ret_{name}')
 
-            # 十分组收益柱状图 + 胜率柱状图（并排）
-            if os.path.exists(ret_parquet):
-                c1, c2 = st.columns(2)
-                with c1:
-                    means = ret_df.mean() * 100
-                    bar_colors = ['#1a9850','#91cf60','#d9ef8b','#fee08b','#fc8d59',
-                                  '#ef6548','#d73027','#b30000','#7f0000','#4d0000']
-                    fig3 = go.Figure()
-                    fig3.add_trace(go.Bar(x=[f'D{i+1}' for i in range(10)], y=means.values,
-                        marker_color=bar_colors))
-                    fig3.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
-                    fig3.update_layout(title=f'{name} 十分组日均收益',
-                        xaxis_title='分组', yaxis_title='日均收益率(%)',
-                        height=300, margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig3, width='stretch', key=f'bar_{name}')
-                with c2:
-                    win_rates = (ret_df > 0).mean() * 100
-                    fig5 = go.Figure()
-                    fig5.add_trace(go.Bar(x=[f'D{i+1}' for i in range(10)], y=win_rates.values,
-                        marker_color=bar_colors))
-                    fig5.add_hline(y=50, line_dash='dash', line_color='gray', line_width=0.6)
-                    fig5.update_layout(title=f'{name} 十分组胜率',
-                        xaxis_title='分组', yaxis_title='胜率(%)', yaxis=dict(range=[0, 100]),
-                        height=300, margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig5, width='stretch', key=f'win_{name}')
+            c1, c2 = st.columns(2)
+            with c1:
+                st.plotly_chart(render_decile_bar(ret_df, name),
+                                width='stretch', key=f'bar_{name}')
+            with c2:
+                st.plotly_chart(render_win_rate(ret_df, name),
+                                width='stretch', key=f'win_{name}')
 
-            # IC 分布直方图（一行4个）
-            ic_parquet = os.path.join(BASE, f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
-            if os.path.exists(ic_parquet):
-                ic_df = pd.read_parquet(ic_parquet)
-                horizons = [c for c in ic_df.columns if c != 'TRADE_DATE']
-                cols = st.columns(len(horizons))
-                colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
-                for idx, h in enumerate(horizons):
-                    with cols[idx]:
-                        vals = ic_df[h].dropna()
-                        mu, sigma = vals.mean(), vals.std()
-                        x_range = np.linspace(vals.min(), vals.max(), 100)
-                        fig4 = go.Figure()
-                        fig4.add_trace(go.Histogram(x=vals, histnorm='probability density',
-                            nbinsx=40, name=f'T+{h}', marker_color=colors[idx], opacity=0.7))
-                        fig4.add_trace(go.Scatter(x=x_range, y=np.exp(-(x_range-mu)**2/(2*sigma**2))/(sigma*np.sqrt(2*np.pi)),
-                            mode='lines', name='正态分布', line=dict(color='red', width=1.5)))
-                        fig4.add_vline(x=mu, line_dash='dash', line_color='crimson', line_width=1.2)
-                        fig4.update_layout(title=f'T+{h} IC 分布', height=250,
-                            margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
-                        st.plotly_chart(fig4, width='stretch', key=f'hist_{name}_{h}')
+            hist_charts = render_ic_distribution(ic_df)
+            cols = st.columns(len(hist_charts))
+            for (h, fig), col in zip(hist_charts, cols):
+                with col:
+                    st.plotly_chart(fig, width='stretch', key=f'hist_{name}_{h}')
 
         st.subheader('牛熊对比')
-        ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_mean_T')],
+        ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_T')],
                          key=lambda x: int(x.split('_T')[1]))
         ir_cols = sorted([c for c in factor_df.columns if c.startswith('icir_T')],
                          key=lambda x: int(x.split('_T')[1]))
