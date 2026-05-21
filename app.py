@@ -3,6 +3,7 @@
 启动：streamlit run app.py
 """
 
+import ast
 import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
@@ -58,6 +59,14 @@ if run:
     st.rerun()
 
 if st.session_state.get('pending'):
+    # 语法检查
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        st.session_state.log = f'语法错误: 第{e.lineno}行 {e.msg}'
+        st.session_state.pending = False
+        st.rerun()
+
     with st.spinner('计算中...'):
         tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
         tmp.write(code)
