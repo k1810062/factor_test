@@ -36,7 +36,7 @@ def ret_5d(api):
 col_left, col_right = st.columns(2)
 
 with col_left:
-    _result = code_editor(TEMPLATE, lang='python', height=420, key='factor_code',
+    _result = code_editor(TEMPLATE, lang='python', height='420px', key='factor_code',
                           response_mode=['blur', 'debounce'],
                           options={'showInvisibles': False, 'minimap': {'enabled': False}})
     code = _result.get('text') or TEMPLATE

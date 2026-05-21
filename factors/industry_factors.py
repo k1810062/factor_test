@@ -250,3 +250,43 @@ def ret_5d(api):
         FROM swi_daily
         WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
     """)
+
+
+# ─── 新增草稿因子 ───
+@factor(name='ma_5d', category='pv', label='5日涨幅', domain='industry')
+def ma_5d(api):
+    return api.query("""
+        SELECT STOCK_CODE as industry_code, TRADE_DATE,
+               (CLOSE / LAG(CLOSE, 5) OVER w - 1) as ma_5d
+        FROM swi_daily
+        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
+    """)
+
+@factor(name='ma_10d', category='pv', label='10日涨幅', domain='industry')
+def ma_10d(api):
+    return api.query("""
+        SELECT STOCK_CODE as industry_code, TRADE_DATE,
+               (CLOSE / LAG(CLOSE, 10) OVER w - 1) as ma_10d
+        FROM swi_daily
+        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
+    """)
+
+
+# ─── 新增草稿因子 ───
+@factor(name='ma_5d', category='pv', label='5日涨幅', domain='industry')
+def ma_5d(api):
+    return api.query("""
+        SELECT STOCK_CODE as industry_code, TRADE_DATE,
+               (CLOSE / LAG(CLOSE, 5) OVER w - 1) as ma_5d
+        FROM swi_daily
+        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
+    """)
+
+@factor(name='ma_10d', category='pv', label='10日涨幅', domain='industry')
+def ma_10d(api):
+    return api.query("""
+        SELECT STOCK_CODE as industry_code, TRADE_DATE,
+               (CLOSE / LAG(CLOSE, 10) OVER w - 1) as ma_10d
+        FROM swi_daily
+        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
+    """)
