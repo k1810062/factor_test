@@ -3,7 +3,7 @@
 启动：streamlit run app.py
 """
 
-import ast
+import ast, time
 import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
@@ -59,7 +59,8 @@ if os.path.exists(csv_path):
                 if c in show.columns:
                     show[c] = show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
             event = st.dataframe(show, hide_index=True, use_container_width=True,
-                                 on_select='rerun', selection_mode='single-row', key='search_tbl')
+                                 on_select='rerun', selection_mode='single-row',
+                                 key=f'search_tbl_{st.session_state.get("search_key", "")}')
             if event and event.selection and event.selection.rows:
                 idx = event.selection.rows[0]
                 selected_name = matched.iloc[idx]['factor']
@@ -69,7 +70,6 @@ if os.path.exists(csv_path):
             st.caption(f'未找到含 "{q}" 的因子')
 
     st.divider()
-    st.markdown('<div id="factor-metrics" style="scroll-margin-top:30px"></div>', unsafe_allow_html=True)
 
 col_left, col_right = st.columns(2)
 
@@ -94,6 +94,7 @@ if run:
     st.session_state.log = ''
     st.session_state.last_names = []
     st.session_state.pending = True
+    st.session_state.search_key = str(hash(str(time.time())))
     st.rerun()
 
 if st.session_state.get('pending'):
@@ -122,6 +123,28 @@ if st.session_state.get('pending'):
         st.session_state.log += '\n--- 错误 ---\n' + result.stderr
     st.session_state.last_names = re.findall(r"@factor\(name='(\w+)'", code)
     st.rerun()
+
+st.markdown('<div id="factor-metrics" style="scroll-margin-top:30px"></div>', unsafe_allow_html=True)
+
+# ---- 展示选中因子的函数代码 ----
+_last = st.session_state.get('last_names', [])
+if _last and os.path.exists(csv_path):
+    _name = _last[0]
+    _found = None
+    for _f in ['factors/industry_factors.py', 'factors/stock_factors.py', 'factors/monthly_factors.py']:
+        _fp = os.path.join(BASE, _f)
+        if os.path.exists(_fp):
+            _txt = open(_fp).read()
+            _i = _txt.find(f"@factor(name='{_name}'")
+            if _i >= 0:
+                _e = _txt.find('\n@factor(', _i + 1)
+                if _e < 0:
+                    _e = len(_txt)
+                _found = _txt[_i:_e].strip()
+                break
+    if _found:
+        st.subheader('因子函数代码')
+        st.code(_found, language='python')
 
 # ---- 显示结果 ----
 names = st.session_state.get('last_names', [])

@@ -1,7 +1,23 @@
 {
-  "analysis": ["charts", "ic", "rr", "sig"],
+  "industry": {
+    "ret_5d": {
+      "cat": "pv",
+      "label": "5日涨幅",
+      "mode": "skip"
+    }
+  },
+  "analysis": [
+    "charts",
+    "ic",
+    "rr",
+    "sig"
+  ],
   "sub_period": {
     "from_file": "data/market_periods.json",
-    "groups": ["bull", "bear", "consolidate"]
+    "groups": [
+      "bull",
+      "bear",
+      "consolidate"
+    ]
   }
 }
