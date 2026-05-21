@@ -20,6 +20,7 @@ st.markdown("""
     .stPlotlyChart { margin-top: 40px; }
     [data-testid="stHeading"] { margin-top: 40px !important; }
     .stDataFrame thead th { text-align: center !important; }
+    .block-container { max-width: 1400px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -42,7 +43,7 @@ if os.path.exists(csv_path):
     df = pd.read_csv(csv_path)
     full_period = df[df['period'] == 'full'].copy()
 
-    c1, c2, c3 = st.columns([3, 1, 1])
+    c1, c2 = st.columns([4, 1])
     with c1:
         with st.form(key='search_form', border=False):
             cols = st.columns([3, 1])
@@ -54,8 +55,6 @@ if os.path.exists(csv_path):
                 if submitted:
                     st.session_state.mode = 'search'
     with c2:
-        pass
-    with c3:
         if st.button('因子列表', use_container_width=True):
             st.session_state.mode = 'list'
 
@@ -108,11 +107,10 @@ if os.path.exists(csv_path):
                 st.session_state.last_names = [_all_names[idx]]
                 st.session_state.should_scroll = True
 
-    st.divider()
-
-col_left, col_right = st.columns(2)
+col_left, col_right = st.columns([3, 2])
 
 with col_left:
+    st.caption('代码')
     _result = code_editor(TEMPLATE, lang='python', height='420px', key='factor_code',
                           response_mode=['blur', 'debounce'],
                           options={'showInvisibles': False, 'minimap': {'enabled': False}})
@@ -124,6 +122,7 @@ with col_left:
         run = st.button('运行', use_container_width=True)
 
 with col_right:
+    st.caption('运行日志')
     log_text = st.session_state.get('log', '')
     st.text_area('运行日志', log_text, height=420, label_visibility='collapsed', disabled=True)
 
