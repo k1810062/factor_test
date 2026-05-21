@@ -17,8 +17,6 @@ st.title('因子测试')
 st.markdown("""
 <style>
     textarea[aria-label="运行日志"] { font-size: 12px !important; }
-    [data-testid="stDataFrame"] td { text-align: center !important; }
-    [data-testid="stDataFrame"] th { text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -61,6 +59,7 @@ if os.path.exists(csv_path):
                 if c in show.columns:
                     show[c] = show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
             event = st.dataframe(show, hide_index=True, use_container_width=True,
+                                 column_config={c: st.column_config.TextColumn(c, alignment='center') for c in show.columns},
                                  on_select='rerun', selection_mode='single-row',
                                  key=f'search_tbl_{st.session_state.get("search_key", "")}')
             if event and event.selection and event.selection.rows:
@@ -126,7 +125,7 @@ if st.session_state.get('pending'):
     st.session_state.last_names = re.findall(r"@factor\(name='(\w+)'", code)
     st.rerun()
 
-st.markdown('<div id="factor-metrics" style="scroll-margin-top:30px"></div>', unsafe_allow_html=True)
+st.markdown('<div id="factor-metrics" style="min-height:80px"></div>', unsafe_allow_html=True)
 
 # ---- 展示选中因子的函数代码 ----
 _last = st.session_state.get('last_names', [])
