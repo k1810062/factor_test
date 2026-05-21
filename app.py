@@ -85,12 +85,45 @@ if st.session_state.get('pending'):
     st.session_state.last_names = re.findall(r"@factor\(name='(\w+)'", code)
     st.rerun()
 
+# ---- 因子搜索 ----
+if os.path.exists(csv_path):
+    import pandas as pd
+    df = pd.read_csv(csv_path)
+    full_period = df[df['period'] == 'full'].copy()
+
+    q = st.text_input('🔍 搜索因子', placeholder='输入因子名、中文名或分类...')
+    q_lower = q.lower() if q else ''
+
+    # 实时模糊匹配 + 可点击表格
+    matched = full_period
+    if q_lower:
+        matched = full_period[
+            full_period['factor'].str.lower().str.contains(q_lower, na=False) |
+            full_period['label'].str.lower().str.contains(q_lower, na=False) |
+            full_period['cat'].str.lower().str.contains(q_lower, na=False)
+        ]
+
+    if not matched.empty:
+        show = matched[['factor', 'label', 'cat', 'ic_mean_T1', 'icir_T1', 'long_win', 'kurtosis']].copy()
+        show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
+        for c in ['多头胜率']:
+            if c in show.columns:
+                show[c] = show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+        event = st.dataframe(show, hide_index=True, use_container_width=True,
+                             on_select='rerun', selection_mode='single-row', key='search_tbl')
+        if event and event.selection and event.selection.rows:
+            idx = event.selection.rows[0]
+            selected_name = matched.iloc[idx]['factor']
+            st.session_state.last_names = [selected_name]
+    elif q:
+        st.caption(f'未找到含 "{q}" 的因子')
+
+    st.divider()
+
 # ---- 显示结果 ----
 names = st.session_state.get('last_names', [])
 
 if names and os.path.exists(csv_path):
-    import pandas as pd
-    df = pd.read_csv(csv_path)
     factor_df = df[df['factor'].isin(names)]
     na = pd.isna
 
