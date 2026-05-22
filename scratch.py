@@ -1,9 +1,9 @@
 """
-草稿因子 → 追加到因子库 → 改配置 → 跑 main。
+草稿因子 → 追加到因子库 → 改配置 → 跑 pipeline。
 
 用法：
-    python3 scratch.py factors/scratch/my_factor.py       跳过已有分析
-    python3 scratch.py --force factors/scratch/my_factor.py  覆盖重算分析
+    python3 scratch.py my_factor.py              自动注册到因子库并跑分析
+    python3 scratch.py --force my_factor.py      覆盖重算分析
 """
 
 import sys, os, json, re
@@ -46,17 +46,26 @@ def main():
             f.write('\n\n# ─── 新增草稿因子 ───\n' + code.strip() + '\n')
         print(f'  [{name}] → 已加入因子库')
 
-    # 读现有配置，保留基础设施，改写因子部分
+    # 写 factors_config.json
+    fc_path = 'config/factors_config.json'
+    fc = {}
+    if os.path.exists(fc_path):
+        fc = json.load(open(fc_path))
+    for domain in {d for _, _, _, d in factors}:
+        fc[domain] = {}
+    for name, cat, label, domain in factors:
+        mode = 'overwrite' if '--force' in sys.argv else 'skip'
+        fc[domain][name] = {'cat': cat, 'label': label, 'mode': mode}
+    with open(fc_path, 'w') as f:
+        json.dump(fc, f, ensure_ascii=False, indent=2)
+    print(f'  → factors_config.json 已写入')
+
+    # 写 config.json（基础设施，不含因子列表）
     old_cfg = json.load(open(CONFIG_PATH)) if os.path.exists(CONFIG_PATH) else {}
     cfg = {}
     for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir'):
         if k in old_cfg:
             cfg[k] = old_cfg[k]
-    for domain in {d for _, _, _, d in factors}:
-        cfg[domain] = {}
-    for name, cat, label, domain in factors:
-        mode = 'overwrite' if '--force' in sys.argv else 'skip'
-        cfg[domain][name] = {'cat': cat, 'label': label, 'mode': mode}
     cfg['analysis'] = ['charts', 'ic', 'rr', 'sig']
     if '--force' in sys.argv:
         cfg['analysis_overwrite'] = ['charts', 'ic', 'rr', 'sig']
@@ -64,7 +73,7 @@ def main():
     cfg['sub_period'] = {'from_file': 'data/market_periods.json', 'groups': ['bull', 'bear', 'consolidate']}
     with open(CONFIG_PATH, 'w') as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
-    print(f'  → config.json 已改写（只保留新因子，覆盖分析）')
+    print(f'  → config.json 已改写（基础设施）')
 
     # 跑 Pipeline
     print('\n=== 运行 Pipeline ===')

@@ -290,3 +290,37 @@ def ma_10d(api):
         FROM swi_daily
         WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
     """)
+
+
+# ─── 新增草稿因子 ───
+@factor(name='bull_bear_spread', category='ind', label='多空均线差', domain='industry')
+def bull_bear_spread(api):
+    return api.query("""
+        SELECT industry_code, TRADE_DATE,
+               (ma_bull - ma_bear) as bull_bear_spread
+        FROM industry_daily
+    """)
+    
+@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='monthly')
+def roe_improve(api):
+    df = api.table('industry_monthly', columns=['industry_code', 'ym', 'roe_pctl'])
+    df = df.sort_values(['industry_code', 'ym'])
+    df['roe_improve'] = df.groupby('industry_code')['roe_pctl'].diff(1)
+    return df[['industry_code', 'ym', 'roe_improve']]
+
+
+# ─── 新增草稿因子 ───
+@factor(name='bull_bear_spread', category='ind', label='多空均线差', domain='industry')
+def bull_bear_spread(api):
+    return api.query("""
+        SELECT industry_code, TRADE_DATE,
+               (ma_bull - ma_bear) as bull_bear_spread
+        FROM industry_daily
+    """)
+    
+@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='monthly')
+def roe_improve(api):
+    df = api.table('industry_monthly', columns=['industry_code', 'ym', 'roe_pctl'])
+    df = df.sort_values(['industry_code', 'ym'])
+    df['roe_improve'] = df.groupby('industry_code')['roe_pctl'].diff(1)
+    return df[['industry_code', 'ym', 'roe_improve']]

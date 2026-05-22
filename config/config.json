@@ -28,20 +28,7 @@
     ]
   },
   "analysis_dir": "output/factor_analysis",
-  "industry": {
-    "mom_12m": {
-      "cat": "ind",
-      "label": "动量因子",
-      "mode": "overwrite"
-    }
-  },
   "analysis": [
-    "charts",
-    "ic",
-    "rr",
-    "sig"
-  ],
-  "analysis_overwrite": [
     "charts",
     "ic",
     "rr",

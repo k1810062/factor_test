@@ -8,8 +8,16 @@ import pandas as pd
 from .registry import get_metrics
 
 
+def _load_factors(factor_type):
+    """从 factors.config 读指定 domain 的因子列表。"""
+    path = 'config/factors_config.json'
+    if not os.path.exists(path):
+        return {}
+    return json.load(open(path)).get(factor_type, {})
+
+
 def _get_overwrite(cfg, factor_type, col):
-    src = cfg.get(factor_type) or cfg.get(f'{factor_type}_factors', {})
+    src = _load_factors(factor_type)
     return src.get(col, {}).get('overwrite', [])
 
 
@@ -18,7 +26,7 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
     analysis_dir = cfg.get('analysis_dir', 'output/factor_analysis')
     base_dir = os.path.dirname(analysis_dir)
 
-    src = cfg.get(factor_type) or cfg.get(f'{factor_type}_factors', {})
+    src = _load_factors(factor_type)
     factors = [(k, v['label'], v['cat']) for k, v in src.items()]
     if not factors:
         return
