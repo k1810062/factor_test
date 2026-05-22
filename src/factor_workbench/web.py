@@ -1,6 +1,6 @@
 """Web 界面：写因子 → 点按钮 → 跑 scratch → 看结果。
 
-启动：streamlit run app.py
+启动：streamlit run src/factor_workbench/web.py
 """
 
 import ast, time
@@ -13,15 +13,13 @@ from factor_workbench.chart_renderer import (
     render_ic_cumulative, render_long_short,
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
-
-BASE = os.path.dirname(__file__)
-sys.path.insert(0, BASE)
-
 from factor_workbench.registry import get_factors, load_factor_modules
 
+BASE = os.getcwd()
+
 # 读因子目录配置 → 加载因子模块触发注册
-_factor_dir = json.load(open('config/config.json')).get('factor_dir', 'factors')
-load_factor_modules(_factor_dir)
+_factor_dir = json.load(open(os.path.join(BASE, 'config/config.json'))).get('factor_dir', 'factors')
+load_factor_modules(os.path.join(BASE, _factor_dir))
 
 st.set_page_config(page_title='因子测试', layout='wide')
 st.title('因子测试')
@@ -74,7 +72,7 @@ def _run_scratch(code, force=False):
     tmp.write(code)
     tmp_path = tmp.name
     tmp.close()
-    cmd = [sys.executable, 'scratch.py']
+    cmd = [sys.executable, '-m', 'factor_workbench.scratch']
     if force:
         cmd.append('--force')
     cmd.append(tmp_path)
@@ -218,7 +216,7 @@ if st.session_state.get('pending'):
         tmp.write(code)
         tmp_path = tmp.name
         tmp.close()
-        cmd = [sys.executable, 'scratch.py']
+        cmd = [sys.executable, '-m', 'factor_workbench.scratch']
         if force:
             cmd.append('--force')
         cmd.append(tmp_path)
