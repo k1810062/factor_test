@@ -10,15 +10,9 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .data_api import DataAPI
-from .registry import get_factors
+from .registry import get_factors, load_factor_modules
 from .metric_runner import run_metrics
-import factors.stock_factors
-import factors.industry_factors
-import factors.monthly_factors
-from . import chart_metric
-from . import ic_metric
-from . import rr_metric
-from . import sig_metric
+from . import chart_metric, ic_metric, rr_metric, sig_metric
 
 def _try_read(path):
     try:
@@ -27,19 +21,18 @@ def _try_read(path):
         return None
 
 
-def _factor_worker(domain, name, backend):
+def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
-    import importlib
-    importlib.import_module(f'factors.{domain}_factors')
-    from factor_workbench.registry import get_factors
+    from factor_workbench.registry import get_factors, load_factor_modules
     from factor_workbench.data_api import DataAPI
+    load_factor_modules(factor_dir)
 
     factors = get_factors(domain=domain)
     meta = factors.get(name)
     if meta is None:
         return name, None
 
-    api = DataAPI(backend=backend)
+    api = DataAPI(backend=backend, tables=tables)
     try:
         df = meta.fn(api)
         return name, df
@@ -54,6 +47,7 @@ class Pipeline:
         self.cfg = json.load(open(config_path))
         self.backend = backend
         self.api = DataAPI(backend=backend, tables=self.cfg.get('tables'))
+        load_factor_modules(self.cfg.get('factor_dir', 'factors'))
 
     def run(self):
         """全流程入口。"""
@@ -123,15 +117,16 @@ class Pipeline:
         results = {}
         n_workers = min(os.cpu_count() or 4, len(to_compute))
 
+        fdir = self.cfg.get('factor_dir', 'factors')
+        tbls = self.cfg.get('tables', {})
         if len(to_compute) == 1 or n_workers == 1:
-            # 串行
             for name in to_compute:
-                r = _factor_worker(domain, name, self.backend)
+                r = _factor_worker(domain, name, self.backend, fdir, tbls)
                 results[name] = r[1]
         else:
             with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futures = {
-                    pool.submit(_factor_worker, domain, name, self.backend): name
+                    pool.submit(_factor_worker, domain, name, self.backend, fdir, tbls): name
                     for name in to_compute
                 }
                 for future in as_completed(futures):

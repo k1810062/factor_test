@@ -14,22 +14,45 @@
     "monthly": "output/data_processed/industry_monthly_ratio.parquet"
   },
   "key_cols": {
-    "stock": ["STOCK_CODE", "TRADE_DATE"],
-    "industry": ["industry_code", "TRADE_DATE"],
-    "monthly": ["industry_code", "ym"]
+    "stock": [
+      "STOCK_CODE",
+      "TRADE_DATE"
+    ],
+    "industry": [
+      "industry_code",
+      "TRADE_DATE"
+    ],
+    "monthly": [
+      "industry_code",
+      "ym"
+    ]
   },
   "analysis_dir": "output/factor_analysis",
-
   "industry": {
-    "ret_5d": {
-      "cat": "pv",
-      "label": "5日涨幅",
-      "mode": "skip"
+    "mom_12m": {
+      "cat": "ind",
+      "label": "动量因子",
+      "mode": "overwrite"
     }
   },
-  "analysis": ["charts", "ic", "rr", "sig"],
+  "analysis": [
+    "charts",
+    "ic",
+    "rr",
+    "sig"
+  ],
+  "analysis_overwrite": [
+    "charts",
+    "ic",
+    "rr",
+    "sig"
+  ],
   "sub_period": {
     "from_file": "data/market_periods.json",
-    "groups": ["bull", "bear", "consolidate"]
+    "groups": [
+      "bull",
+      "bear",
+      "consolidate"
+    ]
   }
 }

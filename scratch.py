@@ -10,13 +10,15 @@ import sys, os, json, re
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-FACTOR_FILES = {
-    'stock':    'factors/stock_factors.py',
-    'industry': 'factors/industry_factors.py',
-    'monthly':  'factors/monthly_factors.py',
-}
-
 CONFIG_PATH = 'config/config.json'
+_CFG = json.load(open(CONFIG_PATH)) if os.path.exists(CONFIG_PATH) else {}
+_FACTOR_DIR = _CFG.get('factor_dir', 'factors')
+
+FACTOR_FILES = {
+    'stock':    f'{_FACTOR_DIR}/stock_factors.py',
+    'industry': f'{_FACTOR_DIR}/industry_factors.py',
+    'monthly':  f'{_FACTOR_DIR}/monthly_factors.py',
+}
 
 
 def main():
