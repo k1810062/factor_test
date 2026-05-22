@@ -55,7 +55,8 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
         print(f'  [{col}] 完成')
 
     # ---- 子区间分析 ----
-    sp = cfg.get('sub_period', {})
+    sp = cfg.get('sub_period', {'from_file': 'data/market_periods.json',
+                                 'groups': ['bull', 'bear', 'consolidate']})
     if 'from_file' in sp:
         ext = json.load(open(sp['from_file']))
         names = sp.get('groups', list(ext.keys()))

@@ -229,6 +229,7 @@ if st.session_state.get('pending'):
     if result.stderr:
         st.session_state.log += '\n--- 错误 ---\n' + result.stderr
     st.session_state.last_names = re.findall(r"@factor\(name='(\w+)'", code)
+    st.session_state.should_scroll = True
     st.rerun()
 
 st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
@@ -236,10 +237,11 @@ st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 # ---- 展示选中因子的函数代码 ----
 _last = st.session_state.get('last_names', [])
 if _last:
-    _found = _get_factor_code(_last[0])
-    if _found:
-        st.subheader('因子函数代码')
-        st.code(_found, language='python')
+    st.subheader('因子函数代码')
+    for _name in _last:
+        _found = _get_factor_code(_name)
+        if _found:
+            st.code(_found, language='python')
 
 # ---- 显示结果 ----
 names = st.session_state.get('last_names', [])
@@ -248,24 +250,26 @@ if names:
     st.subheader('因子评价')
 
     # 指标行（从 CSV，如果有）
-    if df is not None and os.path.exists(csv_path):
-        factor_df = df[df['factor'].isin(names)]
-        na = pd.isna
-        if not factor_df.empty:
-            full = factor_df[factor_df['period'] == 'full']
-            if not full.empty:
-                row = full.iloc[0]
+    na = pd.isna
+    for name in names:
+        meta = get_factors().get(name)
+        if not meta:
+            continue
+        if df is not None and os.path.exists(csv_path):
+            frow = df[(df['factor'] == name) & (df['period'] == 'full')]
+            if not frow.empty:
+                row = frow.iloc[0]
                 ic_mean_cols = sorted([c for c in row.index if c.startswith('ic_T')],
                                       key=lambda x: int(x.split('_T')[1]))
                 icir_cols = sorted([c for c in row.index if c.startswith('icir_T')],
                                    key=lambda x: int(x.split('_T')[1]))
 
                 def _small_metric(col, label, value):
-                    col.markdown(f'<p style="font-size:12px;margin:0;color:#666">{label}<br>'
-                                 f'<strong style="font-size:18px;color:#222">{value}</strong></p>',
+                    col.markdown(f'<p style="font-size:11px;margin:0;color:#666">{label}<br>'
+                                 f'<strong style="font-size:16px;color:#222">{value}</strong></p>',
                                  unsafe_allow_html=True)
 
-                all_items = []
+                all_items = [(f'因子', name)]
                 for ic, ir in zip(ic_mean_cols, icir_cols):
                     h = ic.split('_T')[1]
                     v_ic = f"{row[ic]:.4f}" if not na(row.get(ic)) else '-'
@@ -344,7 +348,7 @@ if names:
             for ic, ir in zip(ic_cols, ir_cols):
                 paired += [ic, ir]
             extra_cols = [c for c in ['long_win', 'short_win', 'long_odds', 'short_odds'] if c in factor_df.columns]
-            cols = ['period'] + paired + extra_cols
+            cols = ['factor', 'period'] + paired + extra_cols
             periods = factor_df[factor_df['period'] != 'full'][cols].copy()
             if not periods.empty:
                 periods = periods.rename(columns={'period': '区间'})

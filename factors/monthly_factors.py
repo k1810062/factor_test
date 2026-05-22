@@ -8,7 +8,7 @@ import numpy as np
 from factor_workbench.registry import factor
 
 
-@factor(name='ret_T1', category='monthly', label='次月收益率', domain='monthly')
+@factor(name='ret_T1', category='monthly', label='次月收益率', domain='monthly', published=False)
 def ret_T1(api):
     """基表：月末指数收盘价 + 次月收益率。"""
     swidx = api.table('swi_daily', columns=['STOCK_CODE', 'TRADE_DATE', 'CLOSE']).rename(
@@ -77,3 +77,12 @@ def mom_12m_m(api):
     monthly['mom_12m_m'] = monthly.groupby('industry_code')['idx_close'].transform(
         lambda x: x.shift(1) / x.shift(12) - 1)
     return monthly[['industry_code', 'ym', 'mom_12m_m']]
+
+
+# ─── 新增草稿因子 ───
+@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='monthly')
+def roe_improve(api):
+    df = api.table('industry_monthly', columns=['industry_code', 'ym', 'roe_pctl'])
+    df = df.sort_values(['industry_code', 'ym'])
+    df['roe_improve'] = df.groupby('industry_code')['roe_pctl'].diff(1)
+    return df[['industry_code', 'ym', 'roe_improve']]
