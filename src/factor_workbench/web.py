@@ -17,10 +17,7 @@ from factor_workbench.registry import get_factors, load_factor_modules
 from factor_workbench.auto_config import generate_config
 
 BASE = os.getcwd()
-generate_config()  # 首次自动生成 config
-
-# 加载因子模块触发注册
-_factor_dir = json.load(open(os.path.join(BASE, 'config/config.json'))).get('factor_dir', 'factors')
+generate_config()
 load_factor_modules(['factors', 'features'])
 
 st.set_page_config(page_title='因子测试', layout='wide')
@@ -105,15 +102,14 @@ def _replace_factor(name, code):
     other = os.path.join(BASE, 'features') if kind != 'feature' else os.path.join(BASE, 'factors')
     search = sorted(glob.glob(f'{base}/*.py')) + sorted(glob.glob(f'{other}/*.py'))
     for f in search:
-        fp = os.path.join(BASE, f)
-        if not os.path.exists(fp):
+        if not os.path.exists(f):
             continue
-        txt = open(fp).read()
+        txt = open(f).read()
         r = _find_func(txt, name)
         if not r:
             continue
         i, e = r
-        open(fp, 'w').write(txt[:i] + func_code + '\n' + txt[e:])
+        open(f, 'w').write(txt[:i] + func_code + '\n' + txt[e:])
         print(f'  [{name}] 已替换')
         return True
     print(f'  [{name}] 未找到，追加到末尾')
