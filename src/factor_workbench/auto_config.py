@@ -30,7 +30,7 @@ def _scan_parquets(dirs):
 
 def generate_config(config_path='config/config.json'):
     """扫描 parquet 注册到 tables，保证 domain 配置存在。"""
-    tables = _scan_parquets(['data', 'output/feature_library'])
+    tables = _scan_parquets(['data', 'output/feature_library', 'output/factor_library'])
 
     cfg = {}
     if os.path.exists(config_path):
