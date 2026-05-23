@@ -7,29 +7,9 @@
     }
   },
   "monthly": {
-    "roe_improve": {
-      "cat": "monthly",
-      "label": "盈利景气改善",
-      "mode": "overwrite"
-    },
-    "upg_cnt_rt": {
-      "cat": "monthly",
-      "label": "上调数量占比",
-      "mode": "overwrite"
-    },
-    "upg_mv_rt": {
-      "cat": "monthly",
-      "label": "上调市值占比",
-      "mode": "overwrite"
-    },
     "roe_pctl": {
       "cat": "monthly",
       "label": "盈利景气度",
-      "mode": "overwrite"
-    },
-    "mom_12m_m": {
-      "cat": "monthly",
-      "label": "月度动量因子",
       "mode": "overwrite"
     }
   }

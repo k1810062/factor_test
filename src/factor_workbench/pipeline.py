@@ -189,8 +189,8 @@ class Pipeline:
         if factor_type == 'industry':
             df = self.api.table('industry_daily', columns=None)
             # 合并指数数据算前向收益
-            idx = self.api.table('industry_price', columns=['stock_code', 'trade_date', 'close'])
-            idx = idx.rename(columns={'stock_code': 'industry_code', 'close': 'idx_close'})
+            idx = self.api.table('industry_price', columns=['industry_code', 'trade_date', 'close'])
+            idx = idx.rename(columns={'close': 'idx_close'})
             df = df.merge(idx, on=['industry_code', 'trade_date'], how='inner')
             df = df.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
             g = df.groupby('industry_code')['idx_close']
@@ -199,10 +199,18 @@ class Pipeline:
             return df
         elif factor_type == 'monthly':
             df = self.api.table('industry_monthly', columns=None)
-            if 'ym' in df.columns:
-                return df
-            # 没有 ym 说明不是月度数据
-            return None
+            if 'ym' not in df.columns:
+                return None
+            # 月末指数收盘价 → 次月收益
+            idx = self.api.table('industry_price', columns=['industry_code', 'trade_date', 'close'])
+            idx = idx.rename(columns={'close': 'idx_close'})
+            idx = idx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
+            idx['ym'] = idx['trade_date'].str[:6]
+            monthly = idx.groupby(['industry_code', 'ym']).tail(1).copy()
+            monthly['ret_T1'] = monthly.groupby('industry_code')['idx_close'].transform(
+                lambda x: x.shift(-1) / x - 1)
+            df = df.merge(monthly[['industry_code', 'ym', 'ret_T1']], on=['industry_code', 'ym'], how='left')
+            return df
         return None
 
     def _run_summary(self):

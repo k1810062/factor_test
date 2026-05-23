@@ -16,8 +16,8 @@ def _mapping(api):
 
 def _swi_idx(api):
     """取行业指数日线。"""
-    return api.table('industry_price', columns=['stock_code', 'trade_date', 'close']).rename(
-        columns={'stock_code': 'industry_code', 'close': 'idx_close'})
+    return api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
+        columns={'close': 'idx_close'})
 
 
 # ─── 8 个简单均值因子 ───
@@ -246,13 +246,11 @@ def pct_5d(api):
 def ret_5d(api):
     return api.query("""
         SELECT stock_code as industry_code, trade_date,
-               (close / LAG(close, 5) OVER w - 1) as ret_5d
+               (close / lag(close, 5) OVER w - 1) as ret_5d
         FROM industry_price
         WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
     """)
 
-
-# ─── 新增草稿因子 ───
 @factor(name='ma_5d', category='pv', label='5日涨幅', domain='industry')
 def ma_5d(api):
     return api.query("""

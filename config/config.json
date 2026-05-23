@@ -34,6 +34,12 @@
     "rr",
     "sig"
   ],
+  "analysis_overwrite": [
+    "charts",
+    "ic",
+    "rr",
+    "sig"
+  ],
   "sub_period": {
     "from_file": "data/market_periods.json",
     "groups": [

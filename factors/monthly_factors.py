@@ -11,8 +11,8 @@ from factor_workbench.registry import factor
 @factor(name='ret_T1', category='monthly', label='次月收益率', domain='monthly', published=False)
 def ret_T1(api):
     """基表：月末指数收盘价 + 次月收益率。"""
-    swidx = api.table('industry_price', columns=['stock_code', 'trade_date', 'close']).rename(
-        columns={'stock_code': 'industry_code', 'close': 'idx_close'})
+    swidx = api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
+        columns={'close': 'idx_close'})
     swidx = swidx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
     swidx['ym'] = swidx['trade_date'].str[:6]
     monthly = swidx.groupby(['industry_code', 'ym']).tail(1).copy()
@@ -68,8 +68,8 @@ def roe_pctl(api):
 
 @factor(name='mom_12m_m', category='monthly', label='月度动量因子', domain='monthly')
 def mom_12m_m(api):
-    swidx = api.table('industry_price', columns=['stock_code', 'trade_date', 'close']).rename(
-        columns={'stock_code': 'industry_code', 'close': 'idx_close'})
+    swidx = api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
+        columns={'close': 'idx_close'})
     swidx = swidx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
     swidx['ym'] = swidx['trade_date'].str[:6]
     monthly = swidx.groupby(['industry_code', 'ym']).tail(1).copy()
