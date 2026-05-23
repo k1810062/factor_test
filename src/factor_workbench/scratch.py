@@ -14,17 +14,13 @@ generate_config()
 
 CONFIG_PATH = 'config/config.json'
 _CFG = json.load(open(CONFIG_PATH))
-_FACTOR_DIR = _CFG.get('factor_dir', 'factors')
 
-FACTOR_FILES = {
-    'stock':    f'{_FACTOR_DIR}/stock_features.py',
-    'industry': f'{_FACTOR_DIR}/industry_factors.py',
-    'monthly':  f'{_FACTOR_DIR}/monthly_factors.py',
-}
 
-FEATURE_FILES = {
-    'stock':    f'{_FACTOR_DIR}/stock_features.py',
-}
+def _target(domain, kind='factor'):
+    """按约定返回因子/特征文件的路径。"""
+    base = 'factors' if kind == 'factor' else 'features'
+    return f'{base}/{domain}_{kind}s.py'
+    # 如: factors/industry_factors.py, features/stock_features.py
 
 
 def _extract_func(code, name, kind='factor'):
@@ -101,7 +97,10 @@ def main():
     # pipeline 成功后写入因子/特征文件
     if success:
         for name, cat, label, domain in factors:
-            target = FACTOR_FILES.get(domain, FACTOR_FILES['industry'])
+            target = _target(domain, 'factor')
+            if not os.path.exists(target):
+                open(target, 'w').write(f'# {domain} 因子\nfrom factor_workbench.registry import factor\n')
+                print(f'  [创建] {target}')
             existing = open(target).read()
             if f"@factor(name='{name}'" in existing:
                 print(f'  [{name}] 已存在，跳过')
@@ -111,7 +110,10 @@ def main():
                 f.write('\n\n# ─── 新增因子 ───\n' + func_code + '\n')
             print(f'  [{name}] → 已加入因子库')
         for name, domain in features:
-            target = FEATURE_FILES.get(domain, list(FEATURE_FILES.values())[0])
+            target = _target(domain, 'feature')
+            if not os.path.exists(target):
+                open(target, 'w').write(f'# {domain} 特征\nfrom factor_workbench.registry import feature\n')
+                print(f'  [创建] {target}')
             existing = open(target).read()
             if f"@feature(name='{name}'" in existing:
                 print(f'  [{name}] 已存在，跳过')

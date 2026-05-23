@@ -48,7 +48,7 @@ class Pipeline:
         self.backend = backend
         self.api = DataAPI(backend=backend, tables=self.cfg.get('tables'))
         self._load_data_fn = load_analysis_data
-        load_factor_modules(self.cfg.get('factor_dir', 'factors'))
+        load_factor_modules(['factors', 'features'])
 
     def run(self):
         """全流程入口。"""
@@ -56,18 +56,16 @@ class Pipeline:
 
         # 计算特征（存 feature_library）
         if os.path.exists('config/features_config.json'):
-            fc = json.load(open('config/features_config.json'))
-            for domain, factors in fc.items():
+            for domain, factors in json.load(open('config/features_config.json')).items():
+                self.cfg['output_paths'][domain] = f'output/feature_library/{domain}.parquet'
                 print(f'\n=== {domain} 特征计算 ===')
-                self.cfg['output_paths'][domain] = f'output/feature_library/{domain}/daily.parquet'
                 self._compute_domain(domain, factors)
 
         # 计算因子（存 factor_library）
         if os.path.exists('config/factors_config.json'):
-            fc = json.load(open('config/factors_config.json'))
-            for domain, factors in fc.items():
+            for domain, factors in json.load(open('config/factors_config.json')).items():
+                self.cfg['output_paths'][domain] = f'output/factor_library/{domain}.parquet'
                 print(f'\n=== {domain} 因子计算 ===')
-                self.cfg['output_paths'][domain] = f'output/factor_library/{domain}/daily.parquet'
                 self._compute_domain(domain, factors)
 
         # 分析
@@ -186,7 +184,7 @@ class Pipeline:
 
         fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
         for factor_type in fc_domains:
-            date_col = 'ym' if factor_type == 'monthly' else 'trade_date'
+            date_col = 'ym' if 'monthly' in str(factor_type) else 'trade_date'
             df = self._load_analysis_data(factor_type)
             if df is None:
                 continue
@@ -211,7 +209,7 @@ class Pipeline:
             for h in (1, 5, 10, 22):
                 df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
             return df
-        elif factor_type == 'monthly':
+        elif 'monthly' in str(factor_type):
             df = self.api.table('industry_monthly', columns=None)
             if 'ym' not in df.columns:
                 return None

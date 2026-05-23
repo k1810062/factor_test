@@ -8,21 +8,7 @@ import numpy as np
 from factor_workbench.registry import factor
 
 
-@factor(name='ret_T1', category='monthly', label='次月收益率', domain='monthly', published=False)
-def ret_T1(api):
-    """基表：月末指数收盘价 + 次月收益率。"""
-    swidx = api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
-        columns={'close': 'idx_close'})
-    swidx = swidx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
-    swidx['ym'] = swidx['trade_date'].str[:6]
-    monthly = swidx.groupby(['industry_code', 'ym']).tail(1).copy()
-    monthly = monthly.sort_values(['industry_code', 'ym']).reset_index(drop=True)
-    monthly['ret_T1'] = monthly.groupby('industry_code')['idx_close'].transform(
-        lambda x: x.shift(-1) / x - 1)
-    return monthly[['industry_code', 'ym', 'ret_T1']]
-
-
-@factor(name='upg_cnt_rt', category='monthly', label='上调数量占比', domain='monthly')
+@factor(name='upg_cnt_rt', category='monthly', label='上调数量占比', domain='industry_monthly')
 def upg_cnt_rt(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'industry_code', 'rating_grade'])
     stock = stock[stock['rating_grade'].notna()].copy()
@@ -36,7 +22,7 @@ def upg_cnt_rt(api):
     return stock.groupby(['industry_code', 'ym']).apply(agg, include_groups=False).reset_index(name='upg_cnt_rt')
 
 
-@factor(name='upg_mv_rt', category='monthly', label='上调市值占比', domain='monthly')
+@factor(name='upg_mv_rt', category='monthly', label='上调市值占比', domain='industry_monthly')
 def upg_mv_rt(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'industry_code', 'rating_grade', 'val_mv'])
     stock = stock[stock['rating_grade'].notna()].copy()
@@ -50,7 +36,7 @@ def upg_mv_rt(api):
     return stock.groupby(['industry_code', 'ym']).apply(agg, include_groups=False).reset_index(name='upg_mv_rt')
 
 
-@factor(name='roe_pctl', category='monthly', label='盈利景气度', domain='monthly')
+@factor(name='roe_pctl', category='monthly', label='盈利景气度', domain='industry_monthly')
 def roe_pctl(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'roe_ttm', 'mv'])
     mapping = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code'])
@@ -66,7 +52,7 @@ def roe_pctl(api):
     return roe[['industry_code', 'ym', 'roe_pctl']]
 
 
-@factor(name='mom_12m_m', category='monthly', label='月度动量因子', domain='monthly')
+@factor(name='mom_12m_m', category='monthly', label='月度动量因子', domain='industry_monthly')
 def mom_12m_m(api):
     swidx = api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
         columns={'close': 'idx_close'})
@@ -80,7 +66,7 @@ def mom_12m_m(api):
 
 
 # ─── 新增草稿因子 ───
-@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='monthly')
+@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='industry_monthly')
 def roe_improve(api):
     df = api.table('industry_monthly', columns=['industry_code', 'ym', 'roe_pctl'])
     df = df.sort_values(['industry_code', 'ym'])

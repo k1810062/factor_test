@@ -21,7 +21,7 @@ generate_config()  # 首次自动生成 config
 
 # 加载因子模块触发注册
 _factor_dir = json.load(open(os.path.join(BASE, 'config/config.json'))).get('factor_dir', 'factors')
-load_factor_modules(os.path.join(BASE, _factor_dir))
+load_factor_modules(['factors', 'features'])
 
 st.set_page_config(page_title='因子测试', layout='wide')
 st.title('因子测试')
@@ -69,20 +69,42 @@ def _find_func(txt, name):
 
 def _get_factor_code(name):
     """从文件提取 @factor/@feature 函数代码。"""
-    for f in ['factors/industry_factors.py', 'factors/stock_features.py', 'factors/monthly_factors.py']:
-        fp = os.path.join(BASE, f)
-        if not os.path.exists(fp):
+    import glob
+    for f in sorted(glob.glob(f'{BASE}/factors/*.py') + glob.glob(f'{BASE}/features/*.py')):
+        if not os.path.exists(f):
             continue
-        r = _find_func(open(fp).read(), name)
+        r = _find_func(open(f).read(), name)
         if r:
             i, e = r
-            return open(fp).read()[i:e].strip()
+            return open(f).read()[i:e].strip()
     return None
 
 
+def _extract_func(code, name, kind='factor'):
+    """从多函数代码块中提取指定名称的函数。"""
+    i = code.find(f"@{kind}(name='{name}'")
+    if i < 0:
+        return None
+    nxt = len(code)
+    for k in ('factor', 'feature', 'metric'):
+        p = code.find(f'\n@{k}(', i + 1)
+        if 0 < p < nxt:
+            nxt = p
+    return code[i:nxt].strip()
+
+
 def _replace_factor(name, code):
-    """替换文件中的同名函数（同时支持 @factor 和 @feature）。"""
-    for f in ['factors/industry_factors.py', 'factors/stock_features.py', 'factors/monthly_factors.py']:
+    """替换文件中的同名函数。按类型优先搜索对应文件。"""
+    kind = 'feature' if f"@feature(name='{name}'" in code else 'factor'
+    func_code = _extract_func(code, name, kind)
+    if not func_code:
+        return
+    # 特征优先 features.py，因子优先 industry/monthly
+    import glob
+    base = os.path.join(BASE, 'features') if kind == 'feature' else os.path.join(BASE, 'factors')
+    other = os.path.join(BASE, 'features') if kind != 'feature' else os.path.join(BASE, 'factors')
+    search = sorted(glob.glob(f'{base}/*.py')) + sorted(glob.glob(f'{other}/*.py'))
+    for f in search:
         fp = os.path.join(BASE, f)
         if not os.path.exists(fp):
             continue
@@ -91,12 +113,13 @@ def _replace_factor(name, code):
         if not r:
             continue
         i, e = r
-        open(fp, 'w').write(txt[:i] + code.strip() + '\n' + txt[e:])
+        open(fp, 'w').write(txt[:i] + func_code + '\n' + txt[e:])
         print(f'  [{name}] 已替换')
         return True
     print(f'  [{name}] 未找到，追加到末尾')
-    with open(os.path.join(BASE, 'factors/industry_factors.py'), 'a') as f:
-        f.write('\n\n' + code.strip() + '\n')
+    base_dir = 'features' if kind == 'feature' else 'factors'
+    with open(os.path.join(BASE, f'{base_dir}/stock_{base_dir}.py'), 'a') as f:
+        f.write('\n\n' + func_code + '\n')
     return True
 
 

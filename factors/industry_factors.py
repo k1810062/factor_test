@@ -6,7 +6,7 @@
 import pandas as pd
 import numpy as np
 from math import ceil
-from factor_workbench.registry import factor
+from factor_workbench.registry import factor, feature
 
 
 def _mapping(api):
@@ -245,10 +245,10 @@ def pct_5d(api):
 @factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
 def ret_5d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / lag(close, 5) OVER w - 1) as ret_5d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
 @factor(name='ma_5d', category='pv', label='5日涨幅', domain='industry')
@@ -299,7 +299,7 @@ def bull_bear_spread(api):
         FROM industry_daily
     """)
     
-@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='monthly')
+@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='industry_monthly')
 def roe_improve(api):
     df = api.table('industry_monthly', columns=['industry_code', 'ym', 'roe_pctl'])
     df = df.sort_values(['industry_code', 'ym'])
@@ -316,9 +316,28 @@ def bull_bear_spread(api):
         FROM industry_daily
     """)
     
-@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='monthly')
+@factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='industry_monthly')
 def roe_improve(api):
     df = api.table('industry_monthly', columns=['industry_code', 'ym', 'roe_pctl'])
     df = df.sort_values(['industry_code', 'ym'])
     df['roe_improve'] = df.groupby('industry_code')['roe_pctl'].diff(1)
     return df[['industry_code', 'ym', 'roe_improve']]
+
+
+# ─── 新增草稿因子 ───
+@factor(name='test_idx_hl', category='ind', label='测试高低差', domain='industry')
+def test_idx_hl(api):
+    return api.query("""
+        SELECT industry_code, trade_date,
+               (close - open) / (open + 1e-10) as test_idx_hl
+        FROM industry_price
+    """)
+
+
+
+
+# ─── 新增因子 ───
+@factor(name='test_ma8_avg', category='pv', label='测试20日线上占比', domain='industry')
+def test_ma8_avg(api):
+    fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'test_ma8_pos'])
+    return fac.groupby(['industry_code', 'trade_date'])['test_ma8_pos'].mean().reset_index(name='test_ma8_avg')

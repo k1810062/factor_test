@@ -10,9 +10,9 @@ import os, json, glob
 
 # 因子库 domain 定义（固定写死）
 DOMAINS = {
-    'stock':    {'key': ['stock_code', 'trade_date'],   'path': 'output/factor_library/stock/daily.parquet'},
-    'industry': {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry/daily.parquet'},
-    'monthly':  {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry/monthly.parquet'},
+    'stock':            {'key': ['stock_code', 'trade_date'],   'path': 'output/factor_library/stock.parquet'},
+    'industry':         {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry.parquet'},
+    'industry_monthly': {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry_monthly.parquet'},
 }
 
 

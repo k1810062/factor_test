@@ -1,15 +1,8 @@
 {
   "industry": {
-    "ret_5d": {
+    "test_ma8_avg": {
       "cat": "pv",
-      "label": "5日涨幅",
-      "mode": "skip"
-    }
-  },
-  "monthly": {
-    "roe_pctl": {
-      "cat": "monthly",
-      "label": "盈利景气度",
+      "label": "测试20日线上占比",
       "mode": "overwrite"
     }
   }

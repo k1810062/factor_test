@@ -2,16 +2,17 @@
   "tables": {
     "stock_daily": "data/stock_daily.parquet",
     "etf_daily": "data/etf_daily.parquet",
-    "stock_features": "output/feature_library/stock_features.parquet",
-    "industry_daily": "output/factor_library/industry/daily.parquet",
-    "industry_monthly": "output/factor_library/industry/monthly.parquet",
+    "stock_features": "output/feature_library/stock.parquet",
+    "industry_daily": "output/factor_library/industry.parquet",
+    "industry_monthly": "output/factor_library/industry_monthly.parquet",
     "industry_price": "data/industry_price.parquet",
-    "index_daily": "/Users/wby/k/factor_test/factor_system/data/index_daily.parquet"
+    "index_daily": "/Users/wby/k/factor_test/factor_system/data/index_daily.parquet",
+    "stock": "/Users/wby/k/factor_test/factor_system/output/feature_library/stock.parquet"
   },
   "output_paths": {
-    "stock": "output/factor_library/stock/daily.parquet",
-    "industry": "output/factor_library/industry/daily.parquet",
-    "monthly": "output/factor_library/industry/monthly.parquet"
+    "stock": "output/factor_library/stock.parquet",
+    "industry": "output/factor_library/industry.parquet",
+    "industry_monthly": "output/factor_library/industry_monthly.parquet"
   },
   "key_cols": {
     "stock": [
@@ -22,7 +23,7 @@
       "industry_code",
       "trade_date"
     ],
-    "monthly": [
+    "industry_monthly": [
       "industry_code",
       "ym"
     ]

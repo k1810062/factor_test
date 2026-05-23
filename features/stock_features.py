@@ -1,18 +1,16 @@
-"""个股因子函数库。每个因子加 @factor 装饰器，通过 api 取数。
-
-每个因子返回带 key 列（STOCK_CODE, TRADE_DATE）+ 因子列的 DataFrame。
+"""特征（中间量）函数库。每个特征加 @feature 装饰器，只计算不分析。
 """
 
 import pandas as pd
 import numpy as np
-from factor_workbench.registry import factor
+from factor_workbench.registry import feature
 
 
 def _fib_ma(df, n):
     return df.groupby('stock_code')['close'].transform(lambda x: x.rolling(n).mean())
 
 
-@factor(name='up_stock', category='pv', label='当日是否上涨', domain='stock', published=False)
+@feature(name='up_stock', domain='stock')
 def up_stock(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     close_diff = df.groupby('stock_code')['close'].diff()
@@ -20,7 +18,7 @@ def up_stock(api):
     return df[['stock_code', 'trade_date']].assign(up_stock=result)
 
 
-@factor(name='strong_stock', category='pv', label='收盘价>60日均线', domain='stock', published=False)
+@feature(name='strong_stock', domain='stock')
 def strong_stock(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     ma60 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(60).mean())
@@ -28,7 +26,7 @@ def strong_stock(api):
     return df[['stock_code', 'trade_date']].assign(strong_stock=result)
 
 
-@factor(name='strong_volume', category='pv', label='成交量异常放大', domain='stock', published=False)
+@feature(name='strong_volume', domain='stock')
 def strong_volume(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'vol'])
     g = df.groupby('stock_code')['vol']
@@ -41,7 +39,7 @@ def strong_volume(api):
     return df[['stock_code', 'trade_date']].assign(strong_volume=result)
 
 
-@factor(name='ma8_pos', category='pv', label='均线位置评分', domain='stock', published=False)
+@feature(name='ma8_pos', domain='stock')
 def ma8_pos(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     fibs = [8, 13, 21, 34, 55, 89, 144, 233]
@@ -61,7 +59,7 @@ def ma8_pos(api):
     return df[['stock_code', 'trade_date']].assign(ma8_pos=result)
 
 
-@factor(name='tech_sync', category='pv', label='技术指标同步', domain='stock', published=False)
+@feature(name='tech_sync', domain='stock')
 def tech_sync(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     ma20 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(20).mean())
@@ -69,7 +67,7 @@ def tech_sync(api):
     return df[['stock_code', 'trade_date']].assign(tech_sync=result)
 
 
-@factor(name='ma_bull', category='pv', label='多头均线排列', domain='stock', published=False)
+@feature(name='ma_bull', domain='stock')
 def ma_bull(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     ma5 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(5).mean())
@@ -80,7 +78,7 @@ def ma_bull(api):
     return df[['stock_code', 'trade_date']].assign(ma_bull=result)
 
 
-@factor(name='ma_bear', category='pv', label='空头均线排列', domain='stock', published=False)
+@feature(name='ma_bear', domain='stock')
 def ma_bear(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     ma5 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(5).mean())
@@ -91,7 +89,7 @@ def ma_bear(api):
     return df[['stock_code', 'trade_date']].assign(ma_bear=result)
 
 
-@factor(name='break_cons', category='pv', label='突破整理平台', domain='stock', published=False)
+@feature(name='break_cons', domain='stock')
 def break_cons(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     high20 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(20).max())
