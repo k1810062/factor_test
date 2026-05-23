@@ -8,8 +8,12 @@
 
 import sys, os, json, re
 
+# 首次运行自动生成 config
+from .auto_config import generate_config
+generate_config()
+
 CONFIG_PATH = 'config/config.json'
-_CFG = json.load(open(CONFIG_PATH)) if os.path.exists(CONFIG_PATH) else {}
+_CFG = json.load(open(CONFIG_PATH))
 _FACTOR_DIR = _CFG.get('factor_dir', 'factors')
 
 FACTOR_FILES = {
@@ -81,3 +85,9 @@ def main():
         p.run()
     finally:
         p.close()
+
+def __main():
+    main()
+
+if __name__ == "__main__":
+    __main()

@@ -21,7 +21,7 @@ def _get_overwrite(cfg, factor_type, col):
     return src.get(col, {}).get('overwrite', [])
 
 
-def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
+def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
     """对所有因子运行配置中的评价指标（串行）。"""
     analysis_dir = cfg.get('analysis_dir', 'output/factor_analysis')
     base_dir = os.path.dirname(analysis_dir)

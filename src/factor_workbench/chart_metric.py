@@ -26,7 +26,7 @@ def chart_metric(df, col, cn_label, cat, base_path):
     stats = valid.describe()
     with open(f'{base}.txt', 'w') as f:
         f.write(f'因子: {col} ({cn_label})\n')
-        f.write(f'日期范围: {df["TRADE_DATE"].min()} ~ {df["TRADE_DATE"].max()}\n')
+        f.write(f'日期范围: {df['trade_date'].min()} ~ {df['trade_date'].max()}\n')
         f.write(f'总样本数: {len(df)}\n')
         f.write(f'有效样本: {len(valid)}\n')
         f.write(f'缺失样本: {df[col].isna().sum()}\n\n')
@@ -41,7 +41,7 @@ def chart_metric(df, col, cn_label, cat, base_path):
     ax.legend()
     fig.tight_layout(); fig.savefig(f'{base}_hist.png', dpi=150); plt.close(fig)
 
-    daily_mean = df.groupby('TRADE_DATE')[col].mean()
+    daily_mean = df.groupby('trade_date')[col].mean()
     dates = pd.to_datetime(daily_mean.index.astype(str), format='%Y%m%d')
     monthly = daily_mean.copy(); monthly.index = dates
     monthly = monthly.resample('ME').mean()

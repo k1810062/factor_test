@@ -174,7 +174,7 @@ class Pipeline:
             return
 
         for factor_type in ('industry', 'monthly'):
-            date_col = 'ym' if factor_type == 'monthly' else 'TRADE_DATE'
+            date_col = 'ym' if factor_type == 'monthly' else 'trade_date'
             df = self._load_analysis_data(factor_type)
             if df is None:
                 continue
@@ -189,10 +189,10 @@ class Pipeline:
         if factor_type == 'industry':
             df = self.api.table('industry_daily', columns=None)
             # 合并指数数据算前向收益
-            idx = self.api.table('swi_daily', columns=['STOCK_CODE', 'TRADE_DATE', 'CLOSE'])
-            idx = idx.rename(columns={'STOCK_CODE': 'industry_code', 'CLOSE': 'idx_close'})
-            df = df.merge(idx, on=['industry_code', 'TRADE_DATE'], how='inner')
-            df = df.sort_values(['industry_code', 'TRADE_DATE']).reset_index(drop=True)
+            idx = self.api.table('industry_price', columns=['stock_code', 'trade_date', 'close'])
+            idx = idx.rename(columns={'stock_code': 'industry_code', 'close': 'idx_close'})
+            df = df.merge(idx, on=['industry_code', 'trade_date'], how='inner')
+            df = df.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
             g = df.groupby('industry_code')['idx_close']
             for h in (1, 5, 10, 22):
                 df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)

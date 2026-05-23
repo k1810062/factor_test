@@ -41,7 +41,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 def _calc_rank_ic(df, factor_col, ret_col):
     dates, ics = [], []
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         vals = grp[[factor_col, ret_col]].dropna()
         if len(vals) < 10:
             continue
@@ -52,7 +52,7 @@ def _calc_rank_ic(df, factor_col, ret_col):
 
 def _calc_decile_rets(df, col):
     dates, rets = [], []
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15:
             continue
@@ -184,8 +184,8 @@ def ic_metric(df, col, cn_label, cat, base_path):
     fig.tight_layout(); fig.savefig(f'{ic_dir}/ic_dist.png', dpi=150); plt.close(fig)
 
     ic_df = pd.DataFrame({f'T+{h}': ic_dict[h] for h in horizons}).reset_index()
-    ic_df.columns = ['TRADE_DATE'] + [f'T+{h}' for h in horizons]
-    ic_df['TRADE_DATE'] = ic_df['TRADE_DATE'].dt.strftime('%Y%m%d')
+    ic_df.columns = ['trade_date'] + [f'T+{h}' for h in horizons]
+    ic_df['trade_date'] = ic_df['trade_date'].dt.strftime('%Y%m%d')
     ic_df.to_parquet(f'{ic_dir}/{col}_ic.parquet', index=False)
 
     decile_rets = _calc_decile_rets(df, col)

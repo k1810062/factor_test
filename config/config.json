@@ -1,26 +1,26 @@
 {
   "tables": {
-    "stock_base": "data/stock_base.parquet",
-    "swi_daily": "data/SWI_daily.parquet",
+    "stock_daily": "data/stock_daily.parquet",
     "etf_daily": "data/etf_daily.parquet",
-    "factor_stock": "output/data_processed/factor_stock.parquet",
-    "industry_daily": "output/data_processed/industry_daily_ratio.parquet",
-    "industry_daily_z": "output/data_processed/industry_daily_ratio_z.parquet",
-    "industry_monthly": "output/data_processed/industry_monthly_ratio.parquet"
+    "stock_features": "output/feature_library/stock_features.parquet",
+    "industry_daily": "output/factor_library/industry/daily.parquet",
+    "industry_monthly": "output/factor_library/industry/monthly.parquet",
+    "industry_price": "data/industry_price.parquet",
+    "index_daily": "/Users/wby/k/factor_test/factor_system/data/index_daily.parquet"
   },
   "output_paths": {
-    "stock": "output/data_processed/factor_stock.parquet",
-    "industry": "output/data_processed/industry_daily_ratio.parquet",
-    "monthly": "output/data_processed/industry_monthly_ratio.parquet"
+    "stock": "output/factor_library/stock/daily.parquet",
+    "industry": "output/factor_library/industry/daily.parquet",
+    "monthly": "output/factor_library/industry/monthly.parquet"
   },
   "key_cols": {
     "stock": [
-      "STOCK_CODE",
-      "TRADE_DATE"
+      "stock_code",
+      "trade_date"
     ],
     "industry": [
       "industry_code",
-      "TRADE_DATE"
+      "trade_date"
     ],
     "monthly": [
       "industry_code",

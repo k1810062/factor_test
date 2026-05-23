@@ -14,10 +14,12 @@ from factor_workbench.chart_renderer import (
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
 from factor_workbench.registry import get_factors, load_factor_modules
+from factor_workbench.auto_config import generate_config
 
 BASE = os.getcwd()
+generate_config()  # 首次自动生成 config
 
-# 读因子目录配置 → 加载因子模块触发注册
+# 加载因子模块触发注册
 _factor_dir = json.load(open(os.path.join(BASE, 'config/config.json'))).get('factor_dir', 'factors')
 load_factor_modules(os.path.join(BASE, _factor_dir))
 
@@ -40,10 +42,10 @@ csv_path = os.path.join(BASE, 'output/result/factor_summary.csv')
 TEMPLATE = '''@factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
 def ret_5d(api):
     return api.query("""
-        SELECT STOCK_CODE as industry_code, TRADE_DATE,
-               (CLOSE / LAG(CLOSE, 5) OVER w - 1) as ret_5d
-        FROM swi_daily
-        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
+        SELECT stock_code as industry_code, trade_date,
+               (close / lag(close, 5) OVER w - 1) as ret_5d
+        FROM industry_price
+        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
     """)
 '''
 

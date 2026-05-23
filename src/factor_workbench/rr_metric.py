@@ -17,7 +17,7 @@ def _calc_rr(df, col, base_path):
     long_wins, short_wins = [], []
     long_odds_list, short_odds_list = [], []
 
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15:
             continue
@@ -47,7 +47,7 @@ def _calc_rr(df, col, base_path):
         f.write(f'多头尾赔率: {long_odds:.4f}\n空头尾赔率: {short_odds:.4f}\n')
 
     win_rates = []
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15:
             continue
