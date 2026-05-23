@@ -68,6 +68,32 @@ def _get_factor_code(name):
     return None
 
 
+def _replace_factor(name, code):
+    """替换因子文件中的同名函数为新代码。"""
+    for f in ['factors/industry_factors.py', 'factors/stock_factors.py', 'factors/monthly_factors.py']:
+        fp = os.path.join(BASE, f)
+        if not os.path.exists(fp):
+            continue
+        txt = open(fp).read()
+        i = txt.find(f"@factor(name='{name}'")
+        if i < 0:
+            continue
+        e = txt.find('\n@factor(', i + 1)
+        if e < 0:
+            e = txt.find('\nfrom ', i + 1)
+        if e < 0:
+            e = len(txt)
+        new_txt = txt[:i] + code.strip() + '\n' + txt[e:]
+        open(fp, 'w').write(new_txt)
+        print(f'  [{name}] 函数已替换')
+        return True
+    print(f'  [{name}] 未找到，追加到文件末尾')
+    # 找不到则追加到 industry 文件
+    with open(os.path.join(BASE, 'factors/industry_factors.py'), 'a') as f:
+        f.write('\n\n' + code.strip() + '\n')
+    return True
+
+
 def _run_scratch(code, force=False):
     """写临时文件 → 跑 scratch.py → 返回 (stdout, stderr)。"""
     tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
@@ -184,10 +210,12 @@ with col_left:
                           response_mode=['blur', 'debounce'],
                           options={'showInvisibles': False, 'minimap': {'enabled': False}})
     code = _result.get('text') or TEMPLATE
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
         force = st.checkbox('覆盖重算')
     with c2:
+        replace = st.checkbox('覆盖写入')
+    with c3:
         run = st.button('运行', width='stretch')
 
 with col_right:
@@ -197,7 +225,10 @@ with col_right:
 
 # ---- 运行流程 ----
 if run:
-    # 第1步：清空旧内容，立即重绘
+    if replace:
+        names_in_code = re.findall(r"@factor\(name='(\w+)'", code)
+        for _name in names_in_code:
+            _replace_factor(_name, code)
     st.session_state.log = ''
     st.session_state.last_names = []
     st.session_state.pending = True
