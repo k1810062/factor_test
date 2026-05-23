@@ -5,3 +5,5 @@ __pycache__/
 output/
 data/
 .egg-info
+data_backup/
+output_backup/
