@@ -225,10 +225,7 @@ with col_right:
 
 # ---- 运行流程 ----
 if run:
-    if replace:
-        names_in_code = re.findall(r"@factor\(name='(\w+)'", code)
-        for _name in names_in_code:
-            _replace_factor(_name, code)
+    st.session_state.replace_pending = replace
     st.session_state.log = ''
     st.session_state.last_names = []
     st.session_state.pending = True
@@ -250,11 +247,18 @@ if st.session_state.get('pending'):
         tmp_path = tmp.name
         tmp.close()
         cmd = [sys.executable, '-m', 'factor_workbench.scratch']
-        if force:
+        if force or replace:
             cmd.append('--force')
         cmd.append(tmp_path)
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE)
         os.unlink(tmp_path)
+
+        # pipeline 跑成功后才执行代码替换
+        if result.returncode == 0 and st.session_state.pop('replace_pending', False):
+            names_in_code = re.findall(r"@factor\(name='(\w+)'", code)
+            for _name in names_in_code:
+                _replace_factor(_name, code)
+
     st.session_state.pending = False
     st.session_state.log = result.stdout
     if result.stderr:

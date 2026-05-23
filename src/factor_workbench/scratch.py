@@ -37,17 +37,6 @@ def main():
         print(code[:500])
         sys.exit(1)
 
-    # 追加到因子库
-    target = FACTOR_FILES.get(factors[0][3], FACTOR_FILES['industry'])
-    existing = open(target).read()
-    for name, cat, label, domain in factors:
-        if f"@factor(name='{name}'" in existing:
-            print(f'  [{name}] 已存在，跳过')
-            continue
-        with open(target, 'a') as f:
-            f.write('\n\n# ─── 新增草稿因子 ───\n' + code.strip() + '\n')
-        print(f'  [{name}] → 已加入因子库')
-
     # 写 factors_config.json
     fc_path = 'config/factors_config.json'
     fc = {}
@@ -81,10 +70,24 @@ def main():
     print('\n=== 运行 Pipeline ===')
     from .pipeline import Pipeline
     p = Pipeline(CONFIG_PATH, backend='duckdb')
+    success = False
     try:
         p.run()
+        success = True
     finally:
         p.close()
+
+    # pipeline 成功后才会写入因子文件
+    if success:
+        target = FACTOR_FILES.get(factors[0][3], FACTOR_FILES['industry'])
+        existing = open(target).read()
+        for name, cat, label, domain in factors:
+            if f"@factor(name='{name}'" in existing:
+                print(f'  [{name}] 已存在，跳过')
+                continue
+            with open(target, 'a') as f:
+                f.write('\n\n# ─── 新增草稿因子 ───\n' + code.strip() + '\n')
+            print(f'  [{name}] → 已加入因子库')
 
 def __main():
     main()
