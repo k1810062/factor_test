@@ -10,7 +10,7 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .data_api import DataAPI
-from .registry import get_factors, load_factor_modules
+from .registry import get_factors, get_features, load_factor_modules
 from .metric_runner import run_metrics
 from . import chart_metric, ic_metric, rr_metric, sig_metric
 
@@ -23,11 +23,11 @@ def _try_read(path):
 
 def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
-    from factor_workbench.registry import get_factors, load_factor_modules
+    from factor_workbench.registry import get_factors, get_features
     from factor_workbench.data_api import DataAPI
-    load_factor_modules(factor_dir)
 
     factors = get_factors(domain=domain)
+    factors.update(get_features(domain=domain))
     meta = factors.get(name)
     if meta is None:
         return name, None
@@ -43,24 +43,34 @@ def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
 
 
 class Pipeline:
-    def __init__(self, config_path, backend='duckdb'):
+    def __init__(self, config_path, backend='duckdb', load_analysis_data=None):
         self.cfg = json.load(open(config_path))
         self.backend = backend
         self.api = DataAPI(backend=backend, tables=self.cfg.get('tables'))
+        self._load_data_fn = load_analysis_data
         load_factor_modules(self.cfg.get('factor_dir', 'factors'))
 
     def run(self):
         """全流程入口。"""
         t0 = time.time()
 
-        for domain in ('stock', 'industry', 'monthly'):
-            selected = self.cfg.get(domain, {})
-            if not selected:
-                continue
-            print(f'\n=== {domain} 因子计算 ===')
-            self._compute_domain(domain, selected)
+        # 计算特征（存 feature_library）
+        if os.path.exists('config/features_config.json'):
+            fc = json.load(open('config/features_config.json'))
+            for domain, factors in fc.items():
+                print(f'\n=== {domain} 特征计算 ===')
+                self.cfg['output_paths'][domain] = f'output/feature_library/{domain}/daily.parquet'
+                self._compute_domain(domain, factors)
 
-        # 分析（复用现有分析流程）
+        # 计算因子（存 factor_library）
+        if os.path.exists('config/factors_config.json'):
+            fc = json.load(open('config/factors_config.json'))
+            for domain, factors in fc.items():
+                print(f'\n=== {domain} 因子计算 ===')
+                self.cfg['output_paths'][domain] = f'output/factor_library/{domain}/daily.parquet'
+                self._compute_domain(domain, factors)
+
+        # 分析
         if self.cfg.get('analysis'):
             print('\n=== 分析 ===')
             self._run_analysis()
@@ -83,8 +93,9 @@ class Pipeline:
         else:
             existing_cols = set()
 
-        # 过滤出需要计算的
+        # 过滤出需要计算的（因子+特征）
         factors = get_factors(domain=domain)
+        factors.update(get_features(domain=domain))
         to_compute = []
         overwrite_names = set()
 
@@ -173,7 +184,8 @@ class Pipeline:
         if not analysis:
             return
 
-        for factor_type in ('industry', 'monthly'):
+        fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
+        for factor_type in fc_domains:
             date_col = 'ym' if factor_type == 'monthly' else 'trade_date'
             df = self._load_analysis_data(factor_type)
             if df is None:
@@ -185,7 +197,9 @@ class Pipeline:
                 print(f'  [{name}] 耗时: {time.time()-t0:.1f}s')
 
     def _load_analysis_data(self, factor_type):
-        """加载分析用的数据（因子值 + 指数 + 前向收益）。"""
+        """加载分析用的数据。支持外部自定义函数。"""
+        if self._load_data_fn:
+            return self._load_data_fn(self.api, factor_type)
         if factor_type == 'industry':
             df = self.api.table('industry_daily', columns=None)
             # 合并指数数据算前向收益

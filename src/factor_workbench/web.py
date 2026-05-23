@@ -42,53 +42,59 @@ csv_path = os.path.join(BASE, 'output/result/factor_summary.csv')
 TEMPLATE = '''@factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
 def ret_5d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / lag(close, 5) OVER w - 1) as ret_5d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 '''
 
 
+def _find_func(txt, name):
+    """在文件中查找 @factor 或 @feature 函数，返回 (start, end) 或 None。"""
+    decors = [f"@factor(name='{name}'", f"@feature(name='{name}'"]
+    for d in decors:
+        i = txt.find(d)
+        if i >= 0:
+            nxt = txt.find('\n@factor(', i + 1)
+            if nxt < 0:
+                nxt = txt.find('\n@feature(', i + 1)
+            if nxt < 0:
+                nxt = txt.find('\nfrom ', i + 1)
+            if nxt < 0:
+                nxt = len(txt)
+            return i, nxt
+    return None
+
+
 def _get_factor_code(name):
-    """从因子文件提取 @factor 函数代码，返回代码字符串或 None。"""
-    for f in ['factors/industry_factors.py', 'factors/stock_factors.py', 'factors/monthly_factors.py']:
+    """从文件提取 @factor/@feature 函数代码。"""
+    for f in ['factors/industry_factors.py', 'factors/stock_features.py', 'factors/monthly_factors.py']:
         fp = os.path.join(BASE, f)
         if not os.path.exists(fp):
             continue
-        txt = open(fp).read()
-        i = txt.find(f"@factor(name='{name}'")
-        if i >= 0:
-            e = txt.find('\n@factor(', i + 1)
-            if e < 0:
-                e = txt.find('\nfrom ', i + 1)
-            if e < 0:
-                e = len(txt)
-            return txt[i:e].strip()
+        r = _find_func(open(fp).read(), name)
+        if r:
+            i, e = r
+            return open(fp).read()[i:e].strip()
     return None
 
 
 def _replace_factor(name, code):
-    """替换因子文件中的同名函数为新代码。"""
-    for f in ['factors/industry_factors.py', 'factors/stock_factors.py', 'factors/monthly_factors.py']:
+    """替换文件中的同名函数（同时支持 @factor 和 @feature）。"""
+    for f in ['factors/industry_factors.py', 'factors/stock_features.py', 'factors/monthly_factors.py']:
         fp = os.path.join(BASE, f)
         if not os.path.exists(fp):
             continue
         txt = open(fp).read()
-        i = txt.find(f"@factor(name='{name}'")
-        if i < 0:
+        r = _find_func(txt, name)
+        if not r:
             continue
-        e = txt.find('\n@factor(', i + 1)
-        if e < 0:
-            e = txt.find('\nfrom ', i + 1)
-        if e < 0:
-            e = len(txt)
-        new_txt = txt[:i] + code.strip() + '\n' + txt[e:]
-        open(fp, 'w').write(new_txt)
-        print(f'  [{name}] 函数已替换')
+        i, e = r
+        open(fp, 'w').write(txt[:i] + code.strip() + '\n' + txt[e:])
+        print(f'  [{name}] 已替换')
         return True
-    print(f'  [{name}] 未找到，追加到文件末尾')
-    # 找不到则追加到 industry 文件
+    print(f'  [{name}] 未找到，追加到末尾')
     with open(os.path.join(BASE, 'factors/industry_factors.py'), 'a') as f:
         f.write('\n\n' + code.strip() + '\n')
     return True
@@ -121,7 +127,7 @@ if os.path.exists(csv_path):
 
 # 构建因子索引：注册表（全量）+ CSV（补充统计值）
 factor_index = {}
-for name, meta in get_factors(published=True).items():
+for name, meta in get_factors().items():
     factor_index[name] = {
         'factor': name, 'label': meta.label,
         'cat': meta.category, 'domain': meta.domain,
@@ -206,7 +212,7 @@ col_left, col_right = st.columns([3, 2])
 
 with col_left:
     st.caption('代码')
-    _result = code_editor(TEMPLATE, lang='python', height='420px', key='factor_code',
+    _result = code_editor(TEMPLATE, lang='python', height='420px', key='factor_code_v1',
                           response_mode=['blur', 'debounce'],
                           options={'showInvisibles': False, 'minimap': {'enabled': False}})
     code = _result.get('text') or TEMPLATE
@@ -255,7 +261,7 @@ if st.session_state.get('pending'):
 
         # pipeline 跑成功后才执行代码替换
         if result.returncode == 0 and st.session_state.pop('replace_pending', False):
-            names_in_code = re.findall(r"@factor\(name='(\w+)'", code)
+            names_in_code = re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
             for _name in names_in_code:
                 _replace_factor(_name, code)
 
@@ -263,7 +269,7 @@ if st.session_state.get('pending'):
     st.session_state.log = result.stdout
     if result.stderr:
         st.session_state.log += '\n--- 错误 ---\n' + result.stderr
-    st.session_state.last_names = re.findall(r"@factor\(name='(\w+)'", code)
+    st.session_state.last_names = re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
     st.session_state.should_scroll = True
     st.rerun()
 
