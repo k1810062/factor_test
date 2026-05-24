@@ -40,12 +40,31 @@ def main():
     path = sys.argv[2] if '--force' in sys.argv else sys.argv[1]
     code = open(path).read()
 
-    factors = re.findall(
-        r"@factor\(name='(\w+)',\s*category='(\w+)',\s*label='(.+?)',\s*domain='(\w+)'",
-        code)
-    features = re.findall(
-        r"@feature\(name='(\w+)',\s*domain='(\w+)'",
-        code)
+    import ast
+    tree = ast.parse(code)
+    factors, features = [], []
+
+    def _get_kw(node, *keys):
+        """从装饰器关键字提取指定参数的值。"""
+        for kw in node.keywords:
+            if kw.arg in keys:
+                return ast.literal_eval(kw.value)
+        return None
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or not node.decorator_list:
+            continue
+        dec = node.decorator_list[0]
+        if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Name):
+            continue
+        name = _get_kw(dec, 'name')
+        domain = _get_kw(dec, 'domain')
+        if not name or not domain:
+            continue
+        if dec.func.id == 'factor':
+            factors.append((name, _get_kw(dec, 'category'), _get_kw(dec, 'label'), domain))
+        elif dec.func.id == 'feature':
+            features.append((name, domain))
 
     if not factors and not features:
         print('错误：未识别到 @factor 或 @feature 装饰器')
@@ -99,7 +118,7 @@ def main():
         for name, cat, label, domain in factors:
             target = _target(domain, 'factor')
             if not os.path.exists(target):
-                open(target, 'w').write(f'# {domain} 因子\nfrom factor_workbench.registry import factor\n')
+                open(target, 'w').write(f'# {domain} 因子\n')
                 print(f'  [创建] {target}')
             existing = open(target).read()
             if f"@factor(name='{name}'" in existing:
@@ -112,7 +131,7 @@ def main():
         for name, domain in features:
             target = _target(domain, 'feature')
             if not os.path.exists(target):
-                open(target, 'w').write(f'# {domain} 特征\nfrom factor_workbench.registry import feature\n')
+                open(target, 'w').write(f'# {domain} 特征\n')
                 print(f'  [创建] {target}')
             existing = open(target).read()
             if f"@feature(name='{name}'" in existing:

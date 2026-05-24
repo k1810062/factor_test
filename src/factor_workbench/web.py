@@ -278,9 +278,28 @@ if st.session_state.get('pending'):
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE)
         os.unlink(tmp_path)
 
+def _decorator_names(code):
+    """从代码中提取 @factor/@feature 的 name 参数。"""
+    import ast
+    try:
+        tree = ast.parse(code)
+        names = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.decorator_list:
+                dec = node.decorator_list[0]
+                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id in ('factor', 'feature'):
+                    for kw in dec.keywords:
+                        if kw.arg == 'name':
+                            names.append(ast.literal_eval(kw.value))
+                            break
+        return names
+    except SyntaxError:
+        return re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
+
+
         # pipeline 跑成功后才执行代码替换
         if result.returncode == 0 and st.session_state.pop('replace_pending', False):
-            names_in_code = re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
+            names_in_code = _decorator_names(code)
             for _name in names_in_code:
                 _replace_factor(_name, code)
 
@@ -288,7 +307,7 @@ if st.session_state.get('pending'):
     st.session_state.log = result.stdout
     if result.stderr:
         st.session_state.log += '\n--- 错误 ---\n' + result.stderr
-    st.session_state.last_names = re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
+    st.session_state.last_names = _decorator_names(code)
     st.session_state.should_scroll = True
     st.rerun()
 
