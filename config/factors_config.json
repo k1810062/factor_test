@@ -1,9 +1,0 @@
-{
-  "industry": {
-    "ret_5d": {
-      "cat": "pv",
-      "label": "5日涨幅",
-      "mode": "overwrite"
-    }
-  }
-}

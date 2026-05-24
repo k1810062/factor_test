@@ -9,3 +9,6 @@ data_backup/
 output_backup/
 factors/
 features/
+
+# auto-generated config
+config/
