@@ -14,9 +14,10 @@ from factor_workbench.analysis.chart_renderer import (
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
 from factor_workbench.engine.registry import get_factors, load_factor_modules
+from pathlib import Path
 from factor_workbench.analysis.auto_config import generate_config
 
-BASE = os.getcwd()
+BASE = str(Path(__file__).resolve().parent.parent.parent)  # llm_factors/
 generate_config()
 load_factor_modules(['factors', 'features'])
 
@@ -35,6 +36,9 @@ st.markdown("""
 
 
 csv_path = os.path.join(BASE, 'output/result/factor_summary.csv')
+
+# 扫描所有 domain 的汇总表
+_csv_files = sorted(glob.glob(os.path.join(BASE, 'output/result/*_factor_summary.csv')))
 
 TEMPLATE = '''@factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
 def ret_5d(api):
@@ -140,11 +144,14 @@ def _run_scratch(code, force=False):
     tmp.write(code)
     tmp_path = tmp.name
     tmp.close()
+    env = os.environ.copy()
+    src_dir = os.path.join(BASE, 'src')
+    env['PYTHONPATH'] = f'{src_dir}:{env.get("PYTHONPATH", "")}'
     cmd = [sys.executable, '-m', 'factor_workbench.scratch']
     if force:
         cmd.append('--force')
     cmd.append(tmp_path)
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE, env=env)
     os.unlink(tmp_path)
     return result.stdout, result.stderr
 
@@ -152,11 +159,16 @@ def _run_scratch(code, force=False):
 # ---- 因子搜索 ----
 import pandas as pd
 
-# 读 CSV（如果有）
+# 读所有 domain 的 CSV（如果有）
 df = None
 full_period = pd.DataFrame()
-if os.path.exists(csv_path):
-    df = pd.read_csv(csv_path)
+for _csv in _csv_files:
+    _d = pd.read_csv(_csv)
+    # 从文件名提取 domain，如 industry_factor_summary.csv → industry
+    _domain = os.path.basename(_csv).replace('_factor_summary.csv', '')
+    _d['domain'] = _domain
+    df = pd.concat([df, _d]) if df is not None else _d
+if df is not None and not df.empty:
     full_period = df[df['period'] == 'full'].copy()
 
 # 构建因子索引：注册表（全量）+ CSV（补充统计值）
@@ -175,8 +187,27 @@ if not full_period.empty:
                     factor_index[fname][col] = row[col]
 
 all_factors = pd.DataFrame(list(factor_index.values()))
-disp_cols = ['factor', 'label', 'cat', 'ic_T1', 'icir_T1', 'long_win', 'kurtosis']
-disp_cols = [c for c in disp_cols if c in all_factors.columns]
+_disp_labels = {
+    'factor': '因子名', 'label': '标签', 'cat': '分类',
+    'ic_T1': 'IC均值', 'icir_T1': 'ICIR',
+    'long_win': '多头胜率', 'kurtosis': '峰度',
+}
+disp_cols = [c for c in _disp_labels if c in all_factors.columns]
+
+# domain 筛选
+_domains = ['全部'] + sorted(all_factors['domain'].unique()) if 'domain' in all_factors.columns else ['全部']
+_domain_key = 'selected_domain'
+if _domain_key not in st.session_state:
+    st.session_state[_domain_key] = '全部'
+cols = st.columns([1] * len(_domains))
+for i, d in enumerate(_domains):
+    btn_style = 'primary' if st.session_state[_domain_key] == d else 'secondary'
+    if cols[i].button(d, key=f'domain_{d}', type=btn_style, use_container_width=True):
+        st.session_state[_domain_key] = d
+        st.rerun()
+
+_selected = st.session_state[_domain_key]
+_domain_filter = all_factors['domain'] == _selected if _selected != '全部' else pd.Series([True] * len(all_factors))
 
 c1, c2 = st.columns([4, 1])
 with c1:
@@ -199,14 +230,15 @@ q_lower = q.lower() if q else ''
 # ---- 搜索模式 ----
 if mode == 'search' and q_lower:
     matched = all_factors[
-        all_factors['factor'].str.lower().str.contains(q_lower, na=False) |
-        all_factors['label'].str.lower().str.contains(q_lower, na=False) |
-        all_factors['cat'].str.lower().str.contains(q_lower, na=False)
+        _domain_filter &
+        (all_factors['factor'].str.lower().str.contains(q_lower, na=False) |
+         all_factors['label'].str.lower().str.contains(q_lower, na=False) |
+         all_factors['cat'].str.lower().str.contains(q_lower, na=False))
     ]
     if not matched.empty:
         st.caption(f'搜索列表  共 {matched["factor"].nunique()} 个因子')
         show = matched[disp_cols].copy()
-        show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
+        show.columns = [_disp_labels[c] for c in disp_cols]
         for c in ['多头胜率']:
             if c in show.columns:
                 show[c] = show[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
@@ -224,9 +256,9 @@ if mode == 'search' and q_lower:
 
 # ---- 列表模式 ----
 if mode == 'list':
-    all_show = all_factors[disp_cols].copy()
+    all_show = all_factors[_domain_filter][disp_cols].copy()
     all_show = all_show.sort_values('factor')
-    all_show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
+    all_show.columns = [_disp_labels[c] for c in disp_cols]
     for c in ['多头胜率']:
         if c in all_show.columns:
             all_show[c] = all_show[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
@@ -286,11 +318,13 @@ if st.session_state.get('pending'):
         tmp.write(code)
         tmp_path = tmp.name
         tmp.close()
+        env = os.environ.copy()
+        env['PYTHONPATH'] = f'{os.path.join(BASE, "src")}:{env.get("PYTHONPATH", "")}'
         cmd = [sys.executable, '-m', 'factor_workbench.scratch']
         if force or replace:
             cmd.append('--force')
         cmd.append(tmp_path)
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE, env=env)
         os.unlink(tmp_path)
 
         # pipeline 跑成功后才执行代码替换
@@ -332,7 +366,7 @@ if names:
         meta = get_factors().get(name)
         if not meta:
             continue
-        if df is not None and os.path.exists(csv_path):
+        if df is not None and not df.empty:
             frow = df[(df['factor'] == name) & (df['period'] == 'full')]
             if not frow.empty:
                 row = frow.iloc[0]
@@ -376,12 +410,13 @@ if names:
         if not meta:
             continue
         cat = meta.category
+        domain = meta.domain
         func_code = _get_func_code(name, kind)
         _rebuild = [df is None or df[df['factor'] == name].empty]
 
         def _try_chart(load_fn, render_fn, key, *args, **kwargs):
             try:
-                data = load_fn(BASE, name, cat) if load_fn else None
+                data = load_fn(BASE, name, cat, domain=domain) if load_fn else None
                 if data is not None:
                     st.plotly_chart(render_fn(data, name, *args, **kwargs),
                                     width='stretch', key=key)
@@ -403,7 +438,7 @@ if names:
             _try_chart(load_ret_data, render_win_rate, f'win_{name}')
 
         try:
-            ic_data = load_ic_data(BASE, name, cat)
+            ic_data = load_ic_data(BASE, name, cat, domain=domain)
             if ic_data is not None:
                 hist_charts = render_ic_distribution(ic_data)
                 cols = st.columns(len(hist_charts))
@@ -426,7 +461,7 @@ if names:
                     st.rerun()
 
     # 牛熊对比（从 CSV）
-    if df is not None and os.path.exists(csv_path):
+    if df is not None and not df.empty:
         _names_only = [n for n, _ in names]
         factor_df = df[df['factor'].isin(_names_only)]
         if not factor_df.empty:

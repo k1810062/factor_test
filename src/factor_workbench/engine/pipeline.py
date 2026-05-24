@@ -23,10 +23,9 @@ def _try_read(path):
 
 def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
-    from factor_workbench.engine.registry import get_factors, get_features, load_factor_modules
+    from factor_workbench.engine.registry import load_factor_modules
     from factor_workbench.engine.data_api import DataAPI
     load_factor_modules(['factors', 'features'])
-
     factors = get_factors(domain=domain)
     factors.update(get_features(domain=domain))
     meta = factors.get(name)
@@ -109,9 +108,6 @@ class Pipeline:
                 to_compute.append(name)
 
         if overwrite_names:
-            if existing is not None:
-                existing = existing.drop(columns=[c for c in overwrite_names if c in existing.columns])
-                existing_cols = set(existing.columns)
             for name in overwrite_names:
                 print(f'  [{name}] overwrite')
                 to_compute.append(name)
@@ -130,10 +126,12 @@ class Pipeline:
         fdir = self.cfg.get('factor_dir', 'factors')
         tbls = self.cfg.get('tables', {})
         if len(to_compute) == 1 or n_workers == 1:
+            print(f'  [串行] {len(to_compute)} 个因子')
             for name in to_compute:
                 r = _factor_worker(domain, name, self.backend, fdir, tbls)
                 results[name] = r[1]
         else:
+            print(f'  [并行] {len(to_compute)} 个因子, {n_workers} 进程')
             with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futures = {
                     pool.submit(_factor_worker, domain, name, self.backend, fdir, tbls): name
@@ -152,7 +150,13 @@ class Pipeline:
             # 首次：从已有结果中取 key 列
             first_result = next((v for v in results.values() if isinstance(v, pd.DataFrame) and v is not None), None)
             if first_result is None:
-                print('  无有效结果')
+                for n, r in results.items():
+                    if r is None:
+                        print(f'  [{n}] 函数未找到')
+                    elif isinstance(r, Exception):
+                        print(f'  [{n}] 错误: {r}')
+                    else:
+                        print(f'  [{n}] 返回类型异常: {type(r).__name__}')
                 return
             result_df = first_result[key_cols].copy()
         else:
@@ -182,6 +186,13 @@ class Pipeline:
         analysis = self.cfg.get('analysis', [])
         if not analysis:
             return
+
+        # 注册因子库/特征库表（刚算完的文件可能还没注册）
+        for pkey in ('output_paths', 'feature_output_paths'):
+            for domain, p in self.cfg.get(pkey, {}).items():
+                pname = os.path.splitext(os.path.basename(p))[0]
+                if pname not in self.cfg.get('tables', {}):
+                    self.api.register_table(pname, p)
 
         fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
         for factor_type in fc_domains:
@@ -214,7 +225,6 @@ class Pipeline:
             df = self.api.table('industry_monthly_factors', columns=None)
             if 'ym' not in df.columns:
                 return None
-            # 月末指数收盘价 → 次月收益
             idx = self.api.table('industry_daily', columns=['industry_code', 'trade_date', 'close'])
             idx = idx.rename(columns={'close': 'idx_close'})
             idx = idx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
@@ -223,6 +233,20 @@ class Pipeline:
             monthly['ret_T1'] = monthly.groupby('industry_code')['idx_close'].transform(
                 lambda x: x.shift(-1) / x - 1)
             df = df.merge(monthly[['industry_code', 'ym', 'ret_T1']], on=['industry_code', 'ym'], how='left')
+            return df
+        elif factor_type == 'stock':
+            if 'stock_factors' not in self.cfg.get('tables', {}):
+                return None
+            df = self.api.table('stock_factors', columns=None)
+            if df.empty:
+                return None
+            idx = self.api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
+            idx = idx.rename(columns={'close': 'idx_close'})
+            df = df.merge(idx, on=['stock_code', 'trade_date'], how='inner')
+            df = df.sort_values(['stock_code', 'trade_date']).reset_index(drop=True)
+            g = df.groupby('stock_code')['idx_close']
+            for h in (1, 5, 10, 22):
+                df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
             return df
         return None
 

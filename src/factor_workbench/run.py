@@ -2,6 +2,11 @@
 
 用法：python3 -m factor_workbench.run
 """
+import os
+from pathlib import Path
+
+os.chdir(str(Path(__file__).resolve().parent.parent.parent))
+
 from .analysis.auto_config import generate_config
 from .engine.pipeline import Pipeline
 

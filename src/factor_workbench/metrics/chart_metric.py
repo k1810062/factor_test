@@ -12,7 +12,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 
 @metric(name='charts', label='因子统计图')
-def chart_metric(df, col, cn_label, cat, base_path):
+def chart_metric(df, col, cn_label, cat, base_path, domain):
     """生成单个因子的统计图。"""
     sub_dir = f'{base_path}/charts'
     os.makedirs(sub_dir, exist_ok=True)
@@ -53,13 +53,14 @@ def chart_metric(df, col, cn_label, cat, base_path):
     ax.legend(fontsize=9); ax.xaxis.set_major_locator(mticker.MaxNLocator(8))
     fig.tight_layout(); fig.savefig(f'{base}_ts.png', dpi=150); plt.close(fig)
 
-    ind_mean = df.groupby('industry')[col].mean().sort_values(ascending=False)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    colors = ['crimson' if v >= 0 else 'steelblue' for v in ind_mean.values]
-    ax.barh(range(len(ind_mean)), ind_mean.values, color=colors, height=0.65)
-    ax.set_yticks(range(len(ind_mean))); ax.set_yticklabels(ind_mean.index, fontsize=8)
-    ax.set_xlabel(cn_label); ax.set_title(f'{cn_label} — 行业均值'); ax.invert_yaxis()
-    fig.tight_layout(); fig.savefig(f'{base}_ind_bar.png', dpi=150, bbox_inches='tight')
-    plt.close(fig)
+    if not domain.startswith('stock'):
+        ind_mean = df.groupby('industry')[col].mean().sort_values(ascending=False)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        colors = ['crimson' if v >= 0 else 'steelblue' for v in ind_mean.values]
+        ax.barh(range(len(ind_mean)), ind_mean.values, color=colors, height=0.65)
+        ax.set_yticks(range(len(ind_mean))); ax.set_yticklabels(ind_mean.index, fontsize=8)
+        ax.set_xlabel(cn_label); ax.set_title(f'{cn_label} — 行业均值'); ax.invert_yaxis()
+        fig.tight_layout(); fig.savefig(f'{base}_ind_bar.png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
 
     print(f'  [{col}] 完成')

@@ -7,6 +7,10 @@
 """
 
 import sys, os, json, re
+from pathlib import Path
+
+# 切到项目根目录
+os.chdir(str(Path(__file__).resolve().parent.parent.parent))
 
 # 首次运行自动生成 config
 from .analysis.auto_config import generate_config
@@ -76,6 +80,7 @@ def main():
     fc_path, feat_path = 'config/factors_config.json', 'config/features_config.json'
     fc, feat = {}, {}
     ow = 'overwrite' if '--force' in sys.argv else 'skip'
+    print(f'  → 模式: {ow}{" (--force)" if "--force" in sys.argv else ""}')
     for name, cat, label, domain in factors:
         fc.setdefault(domain, {})[name] = {'cat': cat, 'label': label, 'mode': ow}
     for name, domain in features:
@@ -83,12 +88,12 @@ def main():
     json.dump(fc, open(fc_path, 'w'), ensure_ascii=False, indent=2)
     json.dump(feat, open(feat_path, 'w'), ensure_ascii=False, indent=2)
     if fc: print(f'  → factors_config.json（{sum(len(v) for v in fc.values())} 个因子）')
-    if feat: print(f'  → features_config.json（{sum(len(v) for v in feat.values())} 个特征）')
+    if feat: print(f'  → features_config.json（{sum(len(v) for v in feat.values())} 个特征, mode={ow}）')
 
     # 写 config.json（基础设施）
     old_cfg = json.load(open(CONFIG_PATH)) if os.path.exists(CONFIG_PATH) else {}
     cfg = {}
-    for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir'):
+    for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir', 'feature_output_paths'):
         if k in old_cfg:
             cfg[k] = old_cfg[k]
     cfg['analysis'] = ['charts', 'ic', 'rr', 'sig']
@@ -99,7 +104,7 @@ def main():
     json.dump(cfg, open(CONFIG_PATH, 'w'), ensure_ascii=False, indent=2)
     print('  → config.json 已改写（基础设施）')
 
-    # 跑 Pipeline（先初始化再注册，防止文件中的旧版覆盖新版）
+    # 跑 Pipeline（串行，直接使用 exec 动态注册的代码）
     print('\n=== 运行 Pipeline ===')
     from .engine.pipeline import Pipeline
     from .engine.registry import factor, feature
@@ -131,6 +136,7 @@ def main():
         for name, domain in features:
             target = _target(domain, 'feature')
             if not os.path.exists(target):
+                os.makedirs(os.path.dirname(target), exist_ok=True)
                 open(target, 'w').write(f'# {domain} 特征\n')
                 print(f'  [创建] {target}')
             existing = open(target).read()

@@ -16,6 +16,8 @@ dependencies = [
     "plotly",
     "streamlit",
     "streamlit-code-editor",
+    "sentence-transformers",
+    "httpx",
 ]
 
 [tool.setuptools.packages.find]

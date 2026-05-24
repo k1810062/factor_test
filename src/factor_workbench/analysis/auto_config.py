@@ -10,9 +10,12 @@ import os, json, glob
 
 # 因子库 domain 定义
 DOMAINS = {
-    'stock':            {'key': ['stock_code', 'trade_date'],   'path': 'output/factor_library/stock.parquet'},
-    'industry':         {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry_factors.parquet'},
-    'industry_monthly': {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry_monthly_factors.parquet'},
+    'stock':            {'key': ['stock_code', 'trade_date'],   'path': 'output/factor_library/stock_factors.parquet',
+                         'analysis_dir': 'output/analysis/stock'},
+    'industry':         {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry_factors.parquet',
+                         'analysis_dir': 'output/analysis/industry'},
+    'industry_monthly': {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry_monthly_factors.parquet',
+                         'analysis_dir': 'output/analysis/industry_monthly'},
 }
 
 # 特征库输出路径（与因子库分开，避免 domain 冲突）
@@ -53,8 +56,12 @@ def generate_config(config_path='config/config.json'):
     for domain, path in FEATURE_OUTPUT_PATHS.items():
         cfg.setdefault('feature_output_paths', {}).setdefault(domain, path)
 
-    # 默认值
-    cfg.setdefault('analysis_dir', 'output/factor_analysis')
+    # 每个 domain 独立分析目录
+    if not isinstance(cfg.get('analysis_dir'), dict):
+        cfg['analysis_dir'] = {}
+    for d, info in DOMAINS.items():
+        cfg['analysis_dir'].setdefault(d, info['analysis_dir'])
+
     cfg.setdefault('analysis', ['charts', 'ic', 'rr', 'sig'])
     cfg.setdefault('sub_period', {
         'from_file': 'data/market_periods.json',

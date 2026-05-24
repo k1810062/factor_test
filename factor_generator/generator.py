@@ -10,8 +10,6 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any
 
-import yaml
-
 from factor_generator.llm_client import LLMClient, LLMError
 from factor_generator.matcher import FieldMatcher
 
@@ -60,11 +58,6 @@ def _load_json(path: str) -> dict:
 def _load_text(path: str) -> str:
     with open(path, encoding='utf-8') as f:
         return f.read()
-
-
-def _load_yaml(path: str) -> dict:
-    with open(path, encoding='utf-8') as f:
-        return yaml.safe_load(f)
 
 
 def _resolve_config_path(config_dir: str, filename: str) -> str:
@@ -146,11 +139,11 @@ def generate(
             _resolve_config_path(config_dir, 'api_config.json'))
         prompt_template = _load_text(
             _resolve_config_path(config_dir, 'prompt_template.txt'))
-        data_dict = _load_yaml(
-            _resolve_config_path(config_dir, 'data_dictionary.yaml'))
+        data_dict = _load_json(
+            _resolve_config_path(config_dir, 'data_dictionary.json'))
     except FileNotFoundError as e:
         return FactorOutput(factors=[], error=str(e))
-    except (json.JSONDecodeError, yaml.YAMLError) as e:
+    except json.JSONDecodeError as e:
         return FactorOutput(factors=[], error=f'配置文件格式错误: {e}')
 
     # 2. 调用 LLM

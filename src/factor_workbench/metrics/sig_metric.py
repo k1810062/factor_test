@@ -12,7 +12,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 
 @metric(name='sig', label='统计特征分析')
-def sig_metric(df, col, cn_label, cat, base_path):
+def sig_metric(df, col, cn_label, cat, base_path, domain):
     sub_dir = f'{base_path}/sig'
     os.makedirs(sub_dir, exist_ok=True)
     base = f'{sub_dir}/{col}'
@@ -24,9 +24,11 @@ def sig_metric(df, col, cn_label, cat, base_path):
 
     excess_kurt = valid.kurtosis()
 
-    n_ind = df['industry_code'].nunique()
+    grp_col = 'stock_code' if domain.startswith('stock') else 'industry_code'
+    grp_label = '股票' if domain.startswith('stock') else '行业'
+    n_ind = df[grp_col].nunique()
     acf1_by_ind = []
-    for code, grp in df.groupby('industry_code'):
+    for code, grp in df.groupby(grp_col):
         s = grp[col].dropna()
         if len(s) < 10:
             continue

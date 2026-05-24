@@ -85,6 +85,6 @@ def _calc_rr(df, col, base_path):
 
 
 @metric(name='rr', label='胜率分析')
-def rr_metric(df, col, cn_label, cat, base_path):
+def rr_metric(df, col, cn_label, cat, base_path, domain):
     long_win, short_win, long_odds, short_odds = _calc_rr(df, col, base_path)
     print(f'  [{col}] 完成: 多头胜率={long_win:.2%}, 空头胜率={short_win:.2%}')

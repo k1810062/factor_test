@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: factor-workbench
+Version: 0.1.0
+Summary: 量化因子研究工作台：因子测试、评价与可视化
+Requires-Python: >=3.12
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: duckdb
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: plotly
+Requires-Dist: streamlit
+Requires-Dist: streamlit-code-editor

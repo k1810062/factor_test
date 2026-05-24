@@ -9,10 +9,14 @@ import numpy as np
 import plotly.graph_objects as go
 
 
-def load_ic_data(base_dir, name, cat):
+def _analysis_path(base_dir, domain, cat, name, suffix):
+    """构造 domain 化的分析结果文件路径。"""
+    return os.path.join(base_dir, f'output/analysis/{domain}/{cat}/{name}/{suffix}')
+
+
+def load_ic_data(base_dir, name, cat, domain='industry'):
     """加载 IC parquet 数据，返回排序后的 DataFrame 或 None。"""
-    path = os.path.join(base_dir,
-                        f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
+    path = _analysis_path(base_dir, domain, cat, name, f'ic/{name}_ic.parquet')
     if not os.path.exists(path):
         return None
     df = pd.read_parquet(path)
@@ -20,21 +24,18 @@ def load_ic_data(base_dir, name, cat):
     return df.sort_values('trade_date').reset_index(drop=True)
 
 
-def load_ret_data(base_dir, name, cat):
+def load_ret_data(base_dir, name, cat, domain='industry'):
     """加载十分组收益 parquet，返回 DataFrame 或 None。"""
-    path = os.path.join(base_dir,
-                        f'output/factor_analysis/{cat}/{name}/ret/{name}_decile_rets.parquet')
+    path = _analysis_path(base_dir, domain, cat, name, f'ret/{name}_decile_rets.parquet')
     if not os.path.exists(path):
         return None
     return pd.read_parquet(path)
 
 
-def data_exists(base_dir, name, cat):
+def data_exists(base_dir, name, cat, domain='industry'):
     """检查因子的 IC 和分组收益数据是否完整。"""
-    ic_path = os.path.join(base_dir,
-                           f'output/factor_analysis/{cat}/{name}/ic/{name}_ic.parquet')
-    ret_path = os.path.join(base_dir,
-                            f'output/factor_analysis/{cat}/{name}/ret/{name}_decile_rets.parquet')
+    ic_path = _analysis_path(base_dir, domain, cat, name, f'ic/{name}_ic.parquet')
+    ret_path = _analysis_path(base_dir, domain, cat, name, f'ret/{name}_decile_rets.parquet')
     return os.path.exists(ic_path) and os.path.exists(ret_path)
 
 

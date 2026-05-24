@@ -40,7 +40,7 @@ aliases 列出每个别名的描述信息，格式如下：
 
 ## 因子代码规范
 - 使用 @factor 装饰器，参数：name/category/label/domain
-- 函数通过 api 参数取数据，使用 api.table() 或 api.query()
+- 函数通过 api 参数取数据，使用 api.table()（参数名 columns，不是 fields）或 api.query()
 - 返回带 key 列 + 因子列的 DataFrame
 - 代码自包含，只依赖 api 参数
 - 表名和字段名使用人类可读的别名，如 idx_daily、close_price、trade_date 等

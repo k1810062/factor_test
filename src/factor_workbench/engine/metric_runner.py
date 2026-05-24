@@ -18,12 +18,19 @@ def _load_factors(factor_type):
 
 def _get_overwrite(cfg, factor_type, col):
     src = _load_factors(factor_type)
-    return src.get(col, {}).get('overwrite', [])
+    meta = src.get(col, {})
+    # 支持两种格式：overwrite: [list] 或 mode: "overwrite"
+    ow = meta.get('overwrite', [])
+    if ow:
+        return ow
+    if meta.get('mode') == 'overwrite':
+        return [cfg.get('analysis', []) if isinstance(cfg.get('analysis'), list) else ['charts', 'ic', 'rr', 'sig']]
+    return []
 
 
 def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
     """对所有因子运行配置中的评价指标（串行）。"""
-    analysis_dir = cfg.get('analysis_dir', 'output/factor_analysis')
+    analysis_dir = cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
     base_dir = os.path.dirname(analysis_dir)
 
     src = _load_factors(factor_type)
@@ -35,14 +42,14 @@ def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
     if meta is None:
         return
 
-    # 全局覆盖
+    # 全局覆盖（domain 化路径）
     global_ow = cfg.get('analysis_overwrite', [])
     if check_subdir and check_subdir in global_ow:
         for col, _, cat in factors:
-            for chk in glob.glob(f'{base_dir}/factor_analysis*/{cat}/{col}/{check_subdir}'):
+            for chk in glob.glob(f'{analysis_dir}*/{cat}/{col}/{check_subdir}'):
                 if os.path.isdir(chk):
                     shutil.rmtree(chk)
-                    print(f'  [覆盖] {os.path.relpath(chk, base_dir)}')
+                    print(f'  [覆盖] {chk}')
 
     def _skip_factor(d, col):
         chk = f'{d}/{check_subdir}' if check_subdir else d
@@ -59,7 +66,7 @@ def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
         if _skip_factor(factor_dir, col):
             print(f'  [{col}] 已分析，跳过')
             continue
-        meta.fn(df, col, cn, cat, factor_dir)
+        meta.fn(df, col, cn, cat, factor_dir, domain=factor_type)
         print(f'  [{col}] 完成')
 
     # ---- 子区间分析 ----
@@ -95,14 +102,15 @@ def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
             else:
                 seg = df[(df[date_col] >= start) & (df[date_col] <= end)]
             segments.append(seg)
+        _sk = 'stock_code' if factor_type.startswith('stock') else 'industry_code'
         df_sub = pd.concat(segments).sort_values(
-            ['industry_code', date_col]).reset_index(drop=True)
+            [_sk, date_col]).reset_index(drop=True)
 
         if len(df_sub) == 0:
             print(f'  [{suffix}] 无数据，跳过')
             continue
 
-        sub_dir = f'{base_dir}/factor_analysis_{suffix}'
+        sub_dir = f'{analysis_dir}_{suffix}'
         os.makedirs(sub_dir, exist_ok=True)
         print(f'\n=== 子区间分析：{suffix} ===')
         for col, cn, cat in factors:
@@ -110,7 +118,7 @@ def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
             if _skip_factor(factor_dir, col):
                 print(f'  [{col}] 已分析，跳过')
                 continue
-            meta.fn(df_sub, col, cn, cat, factor_dir)
+            meta.fn(df_sub, col, cn, cat, factor_dir, domain=factor_type)
             print(f'  [{col}] 完成')
 
     print(f'\n全部完成！结果保存在 {analysis_dir}/')

@@ -139,7 +139,7 @@ def _plot_long_short(decile_rets, label, path):
 
 
 @metric(name='ic', label='Rank IC分析')
-def ic_metric(df, col, cn_label, cat, base_path):
+def ic_metric(df, col, cn_label, cat, base_path, domain):
     ic_dir = f'{base_path}/ic'; ret_dir = f'{base_path}/ret'
     os.makedirs(ic_dir, exist_ok=True); os.makedirs(ret_dir, exist_ok=True)
 
