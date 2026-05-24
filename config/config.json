@@ -7,7 +7,8 @@
     "industry_monthly": "output/factor_library/industry_monthly.parquet",
     "industry_price": "data/industry_price.parquet",
     "index_daily": "/Users/wby/k/factor_test/factor_system/data/index_daily.parquet",
-    "stock": "/Users/wby/k/factor_test/factor_system/output/feature_library/stock.parquet"
+    "stock": "/Users/wby/k/factor_test/factor_system/output/feature_library/stock.parquet",
+    "industry": "/Users/wby/k/factor_test/factor_system/output/factor_library/industry.parquet"
   },
   "output_paths": {
     "stock": "output/factor_library/stock.parquet",
