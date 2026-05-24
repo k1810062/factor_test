@@ -11,15 +11,20 @@ def _mapping(api):
 
 def _swi_idx(api):
     """取行业指数日线。"""
-    return api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
+    return api.table('industry_daily', columns=['industry_code', 'trade_date', 'close']).rename(
         columns={'close': 'idx_close'})
 
 # ─── 8 个简单均值因子 ───
 
 @factor(name='up_ratio', category='pv', label='上涨家数占比', domain='industry')
 def up_ratio(api):
-    fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'up_stock'])
-    return fac.groupby(['industry_code', 'trade_date'])['up_stock'].mean().reset_index(name='up_ratio')
+    return api.query("""
+        SELECT s.industry_code, f.trade_date,
+               AVG(f.up_stock) as up_ratio
+        FROM stock_features f
+        JOIN stock_industry s ON f.stock_code = s.stock_code AND f.trade_date = s.trade_date
+        GROUP BY s.industry_code, f.trade_date
+    """)
 
 @factor(name='strong_ratio', category='pv', label='强势股涨幅占比', domain='industry')
 def strong_ratio(api):
@@ -201,7 +206,7 @@ def mom_12m(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (LAG(close, 21) OVER w / LAG(close, 252) OVER w - 1) as mom_12m
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -212,7 +217,7 @@ def pct_5d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / LAG(close, 5) OVER w - 1) as pct_5d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -222,7 +227,7 @@ def ret_5d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / lag(close, 5) OVER w - 1) as ret_5d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -231,7 +236,7 @@ def ma_5d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / LAG(close, 5) OVER w - 1) as ma_5d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -240,7 +245,7 @@ def ma_10d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / LAG(close, 10) OVER w - 1) as ma_10d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -250,7 +255,7 @@ def ma_5d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / LAG(close, 5) OVER w - 1) as ma_5d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -259,7 +264,7 @@ def ma_10d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / LAG(close, 10) OVER w - 1) as ma_10d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
@@ -301,7 +306,7 @@ def test_idx_hl(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close - open) / (open + 1e-10) as test_idx_hl
-        FROM industry_price
+        FROM industry_daily
     """)
 
 # ─── 新增因子 ───

@@ -8,11 +8,16 @@
 import os, json, glob
 
 
-# 因子库 domain 定义（固定写死）
+# 因子库 domain 定义
 DOMAINS = {
     'stock':            {'key': ['stock_code', 'trade_date'],   'path': 'output/factor_library/stock.parquet'},
-    'industry':         {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry.parquet'},
-    'industry_monthly': {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry_monthly.parquet'},
+    'industry':         {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry_factors.parquet'},
+    'industry_monthly': {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry_monthly_factors.parquet'},
+}
+
+# 特征库输出路径（与因子库分开，避免 domain 冲突）
+FEATURE_OUTPUT_PATHS = {
+    'stock': 'output/feature_library/stock_features.parquet',
 }
 
 
@@ -36,15 +41,17 @@ def generate_config(config_path='config/config.json'):
     if os.path.exists(config_path):
         cfg = json.load(open(config_path))
 
-    # 合并表（新发现的不覆盖已有的）
-    existing = cfg.setdefault('tables', {})
-    for name, path in tables.items():
-        existing.setdefault(name, path)
+    # 表映射直接用扫描结果（文件名变则路径自动更新）
+    cfg['tables'] = tables
 
     # 保证因子库 domain 配置存在
     for d, info in DOMAINS.items():
         cfg.setdefault('key_cols', {}).setdefault(d, info['key'])
         cfg.setdefault('output_paths', {}).setdefault(d, info['path'])
+
+    # 保证特征库输出路径存在
+    for domain, path in FEATURE_OUTPUT_PATHS.items():
+        cfg.setdefault('feature_output_paths', {}).setdefault(domain, path)
 
     # 默认值
     cfg.setdefault('analysis_dir', 'output/factor_analysis')

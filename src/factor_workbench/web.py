@@ -41,7 +41,7 @@ def ret_5d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / lag(close, 5) OVER w - 1) as ret_5d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 '''
@@ -209,7 +209,7 @@ if mode == 'search' and q_lower:
         show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
         for c in ['多头胜率']:
             if c in show.columns:
-                show[c] = show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+                show[c] = show[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
         event = st.dataframe(show, hide_index=True, width='stretch',
                              column_config={c: st.column_config.TextColumn(c, alignment='center') for c in show.columns},
                              on_select='rerun', selection_mode='single-row',
@@ -217,7 +217,7 @@ if mode == 'search' and q_lower:
         if event and event.selection and event.selection.rows:
             idx = event.selection.rows[0]
             selected_name = matched.iloc[idx]['factor']
-            st.session_state.last_names = [selected_name]
+            st.session_state.last_names = [(selected_name, 'factor')]
             st.session_state.should_scroll = True
     else:
         st.caption(f'未找到含 "{q}" 的因子')
@@ -229,7 +229,7 @@ if mode == 'list':
     all_show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
     for c in ['多头胜率']:
         if c in all_show.columns:
-            all_show[c] = all_show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+            all_show[c] = all_show[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
     st.caption(f'因子列表  共 {all_show["因子名"].nunique()} 个因子')
     ev = st.dataframe(all_show, hide_index=True, width='stretch', height=400,
                      column_config={c: st.column_config.TextColumn(c, alignment='center') for c in all_show.columns},
@@ -239,7 +239,7 @@ if mode == 'list':
         idx = ev.selection.rows[0]
         _all_names = all_show['因子名'].tolist()
         if idx < len(_all_names):
-            st.session_state.last_names = [_all_names[idx]]
+            st.session_state.last_names = [(_all_names[idx], 'factor')]
             st.session_state.should_scroll = True
 
 col_left, col_right = st.columns([3, 2])
@@ -354,9 +354,9 @@ if names:
                     all_items.append((f'IC均值(T{h})', v_ic))
                     all_items.append((f'ICIR(T{h})', v_ir))
                 if not na(row.get('long_win')):
-                    all_items.append(('多头胜率', f"{row['long_win']:.1f}%"))
+                    all_items.append(('多头胜率', f"{row['long_win']*100:.1f}%"))
                 if not na(row.get('short_win')):
-                    all_items.append(('空头胜率', f"{row['short_win']:.1f}%"))
+                    all_items.append(('空头胜率', f"{row['short_win']*100:.1f}%"))
                 if not na(row.get('long_odds')):
                     all_items.append(('多赔率', f"{row['long_odds']:.2f}"))
                 if not na(row.get('short_odds')):
@@ -434,7 +434,7 @@ if names:
                 periods = periods.rename(columns={'period': '区间'})
                 for c in ['long_win', 'short_win']:
                     if c in periods.columns:
-                        periods[c] = periods[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+                        periods[c] = periods[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
                 for c in ['long_odds', 'short_odds']:
                     if c in periods.columns:
                         periods[c] = periods[c].apply(lambda x: f'{x:.2f}' if pd.notna(x) else '-')

@@ -58,14 +58,14 @@ class Pipeline:
         # 计算特征（存 feature_library）
         if os.path.exists('config/features_config.json'):
             for domain, factors in json.load(open('config/features_config.json')).items():
-                self.cfg['output_paths'][domain] = f'output/feature_library/{domain}.parquet'
+                self.cfg['output_paths'][domain] = self.cfg['feature_output_paths'][domain]
                 print(f'\n=== {domain} 特征计算 ===')
                 self._compute_domain(domain, factors)
 
         # 计算因子（存 factor_library）
         if os.path.exists('config/factors_config.json'):
             for domain, factors in json.load(open('config/factors_config.json')).items():
-                self.cfg['output_paths'][domain] = f'output/factor_library/{domain}.parquet'
+                pass  # output_paths[domain] 由 config 提供
                 print(f'\n=== {domain} 因子计算 ===')
                 self._compute_domain(domain, factors)
 
@@ -200,9 +200,9 @@ class Pipeline:
         if self._load_data_fn:
             return self._load_data_fn(self.api, factor_type)
         if factor_type == 'industry':
-            df = self.api.table('industry_daily', columns=None)
+            df = self.api.table('industry_factors', columns=None)
             # 合并指数数据算前向收益
-            idx = self.api.table('industry_price', columns=['industry_code', 'trade_date', 'close'])
+            idx = self.api.table('industry_daily', columns=['industry_code', 'trade_date', 'close'])
             idx = idx.rename(columns={'close': 'idx_close'})
             df = df.merge(idx, on=['industry_code', 'trade_date'], how='inner')
             df = df.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
@@ -211,11 +211,11 @@ class Pipeline:
                 df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
             return df
         elif 'monthly' in str(factor_type):
-            df = self.api.table('industry_monthly', columns=None)
+            df = self.api.table('industry_monthly_factors', columns=None)
             if 'ym' not in df.columns:
                 return None
             # 月末指数收盘价 → 次月收益
-            idx = self.api.table('industry_price', columns=['industry_code', 'trade_date', 'close'])
+            idx = self.api.table('industry_daily', columns=['industry_code', 'trade_date', 'close'])
             idx = idx.rename(columns={'close': 'idx_close'})
             idx = idx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
             idx['ym'] = idx['trade_date'].str[:6]
