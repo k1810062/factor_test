@@ -1,9 +1,187 @@
 {
   "industry": {
+    "up_ratio": {
+      "cat": "pv",
+      "label": "上涨家数占比",
+      "mode": "skip"
+    },
+    "strong_ratio": {
+      "cat": "pv",
+      "label": "强势股涨幅占比",
+      "mode": "skip"
+    },
+    "vol_ratio": {
+      "cat": "pv",
+      "label": "强势成交量占比",
+      "mode": "skip"
+    },
+    "ma8_pos_avg": {
+      "cat": "pv",
+      "label": "8日均线多头占比",
+      "mode": "skip"
+    },
+    "tech_sync_rt": {
+      "cat": "pv",
+      "label": "技术指标同步率",
+      "mode": "skip"
+    },
+    "break_cons_rt": {
+      "cat": "pv",
+      "label": "突破整理形态占比",
+      "mode": "skip"
+    },
+    "ma_bull": {
+      "cat": "pv",
+      "label": "多头均线占比",
+      "mode": "skip"
+    },
+    "ma_bear": {
+      "cat": "pv",
+      "label": "空头均线占比",
+      "mode": "skip"
+    },
+    "ma5_ratio": {
+      "cat": "pv",
+      "label": "MA5上方占比",
+      "mode": "skip"
+    },
+    "strong_fund_ratio": {
+      "cat": "fund",
+      "label": "强势股资金占比",
+      "mode": "skip"
+    },
+    "turn_pctl": {
+      "cat": "ind",
+      "label": "换手率分位数",
+      "mode": "skip"
+    },
+    "diverge_5d": {
+      "cat": "fund",
+      "label": "主力资金背离度",
+      "mode": "skip"
+    },
+    "ret_divg": {
+      "cat": "ind",
+      "label": "涨幅分化度",
+      "mode": "skip"
+    },
+    "amt_divg": {
+      "cat": "fund",
+      "label": "成交占比乖离率",
+      "mode": "skip"
+    },
+    "margin_dir": {
+      "cat": "fund",
+      "label": "融资盘方向",
+      "mode": "skip"
+    },
+    "margin_sum5": {
+      "cat": "fund",
+      "label": "融资净买入5日滚动",
+      "mode": "skip"
+    },
+    "pb_disp": {
+      "cat": "ind",
+      "label": "估值离散度",
+      "mode": "skip"
+    },
+    "etf_inflow_st": {
+      "cat": "fund",
+      "label": "行业ETF净流入5日平滑",
+      "mode": "skip"
+    },
+    "mom_12m": {
+      "cat": "ind",
+      "label": "动量因子",
+      "mode": "skip"
+    },
+    "pct_5d": {
+      "cat": "pv",
+      "label": "5日涨幅",
+      "mode": "skip"
+    },
+    "ret_5d": {
+      "cat": "pv",
+      "label": "5日涨幅",
+      "mode": "skip"
+    },
+    "ma_5d": {
+      "cat": "pv",
+      "label": "5日涨幅",
+      "mode": "skip"
+    },
+    "ma_10d": {
+      "cat": "pv",
+      "label": "10日涨幅",
+      "mode": "skip"
+    },
+    "bull_bear_spread": {
+      "cat": "ind",
+      "label": "多空均线差",
+      "mode": "skip"
+    },
+    "test_idx_hl": {
+      "cat": "ind",
+      "label": "测试高低差",
+      "mode": "skip"
+    },
     "test_ma8_avg": {
       "cat": "pv",
       "label": "测试20日线上占比",
-      "mode": "overwrite"
+      "mode": "skip"
+    }
+  },
+  "industry_monthly": {
+    "roe_improve": {
+      "cat": "monthly",
+      "label": "盈利景气改善",
+      "mode": "skip"
+    },
+    "upg_cnt_rt": {
+      "cat": "monthly",
+      "label": "上调数量占比",
+      "mode": "skip"
+    },
+    "upg_mv_rt": {
+      "cat": "monthly",
+      "label": "上调市值占比",
+      "mode": "skip"
+    },
+    "roe_pctl": {
+      "cat": "monthly",
+      "label": "盈利景气度",
+      "mode": "skip"
+    },
+    "mom_12m_m": {
+      "cat": "monthly",
+      "label": "月度动量因子",
+      "mode": "skip"
+    }
+  },
+  "stock": {
+    "up_stock": {
+      "mode": "skip"
+    },
+    "strong_stock": {
+      "mode": "skip"
+    },
+    "strong_volume": {
+      "mode": "skip"
+    },
+    "ma8_pos": {
+      "mode": "skip"
+    },
+    "tech_sync": {
+      "mode": "skip"
+    },
+    "ma_bull": {
+      "mode": "skip"
+    },
+    "ma_bear": {
+      "mode": "skip"
+    },
+    "break_cons": {
+      "mode": "skip"
     }
   }
 }

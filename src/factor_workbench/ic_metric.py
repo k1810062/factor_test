@@ -1,6 +1,6 @@
 """Rank IC 分析 + 十分组累计收益。@metric 装饰器注册。"""
 
-import warnings
+import warnings, json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -159,14 +159,22 @@ def ic_metric(df, col, cn_label, cat, base_path):
     mu, std, icir = _calc_nw_icir(ic_dict[1], 1, ann_factor)
     t_stat = mu / (std / np.sqrt(len(ic_dict[1].dropna()))) if std > 0 else np.nan
 
-    with open(f'{ic_dir}/{col}_ic.txt', 'w') as f:
-        f.write(f'因子: {col} ({cn_label})\n样本数(月): {len(ic_dict[1].dropna())}\n')
-        f.write(f'IC 均值: {mu:.6f}\nIC 标准差: {std:.6f}\nICIR: {icir:.4f}\nt 统计量: {t_stat:.4f}\n')
-        f.write(f'\n{"Horizon":>8} {"IC均值":>10} {"IC标准差":>10} {"ICIR":>10} {"t统计量":>10}\n')
+    with open(f'{ic_dir}/{col}_ic.json', 'w') as f:
+        horizons_data = []
         for h in horizons:
-            mu, std, ir = _calc_nw_icir(ic_dict[h], h, ann_factor)
-            t = mu / (std / np.sqrt(len(ic_dict[h].dropna()))) if std > 0 else 0
-            f.write(f'{f"T+{h}":>8} {mu:>10.6f} {std:>10.6f} {ir:>10.4f} {t:>10.4f}\n')
+            hm, hs, hir = _calc_nw_icir(ic_dict[h], h, ann_factor)
+            ht = hm / (hs / np.sqrt(len(ic_dict[h].dropna()))) if hs > 0 else 0
+            horizons_data.append({
+                'h': h, 'ic_mean': round(hm, 6), 'ic_std': round(hs, 6),
+                'icir': round(hir, 4), 't_stat': round(ht, 4),
+            })
+        json.dump({
+            'name': col, 'label': cn_label,
+            'n_months': len(ic_dict[1].dropna()),
+            'ic_mean': round(mu, 6), 'ic_std': round(std, 6),
+            'icir': round(icir, 4), 't_stat': round(t_stat, 4),
+            'horizons': horizons_data,
+        }, f, indent=2, ensure_ascii=False)
 
     _plot_cumulative_ic(ic_dict, cn_label, f'{ic_dir}/ic_cum.png')
     _plot_ic_ts(ic_dict, cn_label, f'{ic_dir}/ic_ts.png')
@@ -194,7 +202,10 @@ def ic_metric(df, col, cn_label, cat, base_path):
     _plot_decile_bar(decile_rets, cn_label, f'{ret_dir}/ret_decile_bar.png')
     _plot_long_short(decile_rets, cn_label, f'{ret_dir}/ret_long_short.png')
     ret_mean = decile_rets.mean()
-    with open(f'{ret_dir}/{col}_ret.txt', 'w') as f:
-        f.write(f'ret_D1={ret_mean[0]:.8f}\nret_D10={ret_mean[9]:.8f}\n'
-                f'ret_spread={ret_mean[9] - ret_mean[0]:.8f}\n')
+    with open(f'{ret_dir}/{col}_ret.json', 'w') as f:
+        json.dump({
+            'ret_D1': round(float(ret_mean[0]), 8),
+            'ret_D10': round(float(ret_mean[9]), 8),
+            'ret_spread': round(float(ret_mean[9] - ret_mean[0]), 8),
+        }, f, indent=2, ensure_ascii=False)
     print(f'  [{col}] 完成')
