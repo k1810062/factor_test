@@ -70,7 +70,7 @@ def load_factor_modules(factor_dirs=None):
         factor_dirs = [factor_dirs]
     for factor_dir in factor_dirs:
         if not os.path.isdir(factor_dir):
-            os.makedirs(factor_dir)
+            continue
         import pandas as pd, numpy as np
         for f in sorted(os.listdir(factor_dir)):
             if not f.endswith('.py') or f.startswith('_'):
