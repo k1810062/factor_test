@@ -12,3 +12,6 @@ features/
 
 # auto-generated config
 config/
+
+# 启动脚本
+启动.command
