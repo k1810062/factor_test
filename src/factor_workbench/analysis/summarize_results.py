@@ -167,13 +167,11 @@ def main():
                  'kurtosis', 'acf1_mean', 'acf1_std']
     df = df[[c for c in col_order if c in df.columns]]
 
-    # 胜率转百分数，其余数值保留四位小数
-    pct_cols = {'long_win', 'short_win'}
+    # 数值保留四位小数（不转换百分比，CSV 存原始值，展示时再转）
     for c in df.columns:
         if c in ('factor', 'label', 'cat', 'period'):
             continue
-        if c in pct_cols:
-            df[c] = df[c] * 100
+        df[c] = pd.to_numeric(df[c])
         df[c] = df[c].round(4)
     os.makedirs(f'{_output_dir()}/result', exist_ok=True)
     out_path = f'{_output_dir()}/result/factor_summary.csv'

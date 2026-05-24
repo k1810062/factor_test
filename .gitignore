@@ -7,3 +7,5 @@ data/
 .egg-info
 data_backup/
 output_backup/
+factors/
+features/

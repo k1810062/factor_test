@@ -1,19 +1,17 @@
 {
   "tables": {
-    "stock_daily": "data/stock_daily.parquet",
-    "etf_daily": "data/etf_daily.parquet",
-    "stock_features": "output/feature_library/stock.parquet",
-    "industry_daily": "output/factor_library/industry.parquet",
-    "industry_monthly": "output/factor_library/industry_monthly.parquet",
-    "industry_price": "data/industry_price.parquet",
-    "index_daily": "/Users/wby/k/factor_test/factor_system/data/index_daily.parquet",
-    "stock": "/Users/wby/k/factor_test/factor_system/output/feature_library/stock.parquet",
-    "industry": "/Users/wby/k/factor_test/factor_system/output/factor_library/industry.parquet"
+    "etf_daily": "/Users/wby/k/factor_test/factor_system/data/etf_daily.parquet",
+    "industry_daily": "/Users/wby/k/factor_test/factor_system/data/industry_daily.parquet",
+    "stock_daily": "/Users/wby/k/factor_test/factor_system/data/stock_daily.parquet",
+    "stock_industry": "/Users/wby/k/factor_test/factor_system/data/stock_industry.parquet",
+    "stock_features": "/Users/wby/k/factor_test/factor_system/output/feature_library/stock_features.parquet",
+    "industry_factors": "/Users/wby/k/factor_test/factor_system/output/factor_library/industry_factors.parquet",
+    "industry_monthly_factors": "/Users/wby/k/factor_test/factor_system/output/factor_library/industry_monthly_factors.parquet"
   },
   "output_paths": {
     "stock": "output/factor_library/stock.parquet",
-    "industry": "output/factor_library/industry.parquet",
-    "industry_monthly": "output/factor_library/industry_monthly.parquet"
+    "industry": "output/factor_library/industry_factors.parquet",
+    "industry_monthly": "output/factor_library/industry_monthly_factors.parquet"
   },
   "key_cols": {
     "stock": [
@@ -43,5 +41,8 @@
       "bear",
       "consolidate"
     ]
+  },
+  "feature_output_paths": {
+    "stock": "output/feature_library/stock_features.parquet"
   }
 }

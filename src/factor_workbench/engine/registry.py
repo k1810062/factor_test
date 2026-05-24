@@ -62,34 +62,21 @@ def feature(name, domain='stock'):
     return wrapper
 
 
-SAMPLE_FACTOR = '''"""示例因子。可删除或修改。"""
-from factor_workbench.engine.registry import factor
-
-
-@factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
-def ret_5d(api):
-    return api.query("""
-        SELECT STOCK_CODE as industry_code, TRADE_DATE,
-               (CLOSE / LAG(CLOSE, 5) OVER w - 1) as ret_5d
-        FROM swi_daily
-        WINDOW w AS (PARTITION BY STOCK_CODE ORDER BY TRADE_DATE)
-    """)
-'''
-
-
 def load_factor_modules(factor_dirs=None):
-    """扫描目录下的所有 .py 文件并导入，触发 @factor/@metric 注册。"""
+    """扫描目录下的所有 .py 文件并导入，触发 @factor/@metric 注册。
+
+    目录路径以项目根（factor_system/）为基准，不受 CWD 影响。
+    """
+    # 项目根 = src/factor_workbench/engine/ → src/ → ../
+    _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     if factor_dirs is None:
         factor_dirs = ['factors']
     elif isinstance(factor_dirs, str):
         factor_dirs = [factor_dirs]
     for factor_dir in factor_dirs:
+        factor_dir = os.path.join(_root, factor_dir)
         if not os.path.isdir(factor_dir):
             os.makedirs(factor_dir)
-        if not [f for f in os.listdir(factor_dir) if f.endswith('.py') and not f.startswith('_')]:
-            with open(os.path.join(factor_dir, 'sample_factor.py'), 'w') as f:
-                f.write(SAMPLE_FACTOR)
-            print(f'  [registry] 已创建示例因子 {factor_dir}/sample_factor.py')
         import pandas as pd, numpy as np
         for f in sorted(os.listdir(factor_dir)):
             if not f.endswith('.py') or f.startswith('_'):

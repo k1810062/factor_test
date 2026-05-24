@@ -9,7 +9,7 @@ import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
 
 from factor_workbench.analysis.chart_renderer import (
-    load_ic_data, load_ret_data, data_exists,
+    load_ic_data, load_ret_data,
     render_ic_cumulative, render_long_short,
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
@@ -41,7 +41,7 @@ def ret_5d(api):
     return api.query("""
         SELECT industry_code, trade_date,
                (close / lag(close, 5) OVER w - 1) as ret_5d
-        FROM industry_price
+        FROM industry_daily
         WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 '''
@@ -64,30 +64,27 @@ def _find_func(txt, name):
     return None
 
 
-def _decorator_names(code):
-    """从代码中提取 @factor/@feature 的 name 参数。"""
+def _parse_decorators(code):
+    """从代码中提取 (name, kind) 列表。识别所有 @xxx(name=...) 格式。"""
     import ast
-    try:
-        tree = ast.parse(code)
-        names = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.decorator_list:
-                dec = node.decorator_list[0]
-                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id in ('factor', 'feature'):
-                    for kw in dec.keywords:
-                        if kw.arg == 'name':
-                            names.append(ast.literal_eval(kw.value))
-                            break
-        return names
-    except SyntaxError:
-        return re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
+    tree = ast.parse(code)
+    items = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.decorator_list:
+            dec = node.decorator_list[0]
+            if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
+                name = next((ast.literal_eval(kw.value) for kw in dec.keywords if kw.arg == 'name'), None)
+                if name:
+                    items.append((name, dec.func.id))
+    return items
 
 
 
-def _get_factor_code(name):
-    """从文件提取 @factor/@feature 函数代码。"""
+def _get_func_code(name, kind):
+    """从对应类型目录提取函数代码。"""
     import glob
-    for f in sorted(glob.glob(f'{BASE}/factors/*.py') + glob.glob(f'{BASE}/features/*.py')):
+    base = 'features' if kind == 'feature' else 'factors'
+    for f in sorted(glob.glob(f'{BASE}/{base}/*.py')):
         if not os.path.exists(f):
             continue
         r = _find_func(open(f).read(), name)
@@ -110,13 +107,11 @@ def _extract_func(code, name, kind='factor'):
     return code[i:nxt].strip()
 
 
-def _replace_factor(name, code):
-    """替换文件中的同名函数。按类型优先搜索对应文件。"""
-    kind = 'feature' if f"@feature(name='{name}'" in code else 'factor'
+def _replace_factor(name, kind, code):
+    """替换文件中的同名函数。优先搜索对应类型目录。"""
     func_code = _extract_func(code, name, kind)
     if not func_code:
         return
-    # 特征优先 features.py，因子优先 industry/monthly
     import glob
     base = os.path.join(BASE, 'features') if kind == 'feature' else os.path.join(BASE, 'factors')
     other = os.path.join(BASE, 'features') if kind != 'feature' else os.path.join(BASE, 'factors')
@@ -214,7 +209,7 @@ if mode == 'search' and q_lower:
         show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
         for c in ['多头胜率']:
             if c in show.columns:
-                show[c] = show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+                show[c] = show[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
         event = st.dataframe(show, hide_index=True, width='stretch',
                              column_config={c: st.column_config.TextColumn(c, alignment='center') for c in show.columns},
                              on_select='rerun', selection_mode='single-row',
@@ -222,7 +217,7 @@ if mode == 'search' and q_lower:
         if event and event.selection and event.selection.rows:
             idx = event.selection.rows[0]
             selected_name = matched.iloc[idx]['factor']
-            st.session_state.last_names = [selected_name]
+            st.session_state.last_names = [(selected_name, 'factor')]
             st.session_state.should_scroll = True
     else:
         st.caption(f'未找到含 "{q}" 的因子')
@@ -234,7 +229,7 @@ if mode == 'list':
     all_show.columns = ['因子名', '标签', '分类', 'IC均值', 'ICIR', '多头胜率', '峰度']
     for c in ['多头胜率']:
         if c in all_show.columns:
-            all_show[c] = all_show[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+            all_show[c] = all_show[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
     st.caption(f'因子列表  共 {all_show["因子名"].nunique()} 个因子')
     ev = st.dataframe(all_show, hide_index=True, width='stretch', height=400,
                      column_config={c: st.column_config.TextColumn(c, alignment='center') for c in all_show.columns},
@@ -244,7 +239,7 @@ if mode == 'list':
         idx = ev.selection.rows[0]
         _all_names = all_show['因子名'].tolist()
         if idx < len(_all_names):
-            st.session_state.last_names = [_all_names[idx]]
+            st.session_state.last_names = [(_all_names[idx], 'factor')]
             st.session_state.should_scroll = True
 
 col_left, col_right = st.columns([3, 2])
@@ -300,15 +295,15 @@ if st.session_state.get('pending'):
 
         # pipeline 跑成功后才执行代码替换
         if result.returncode == 0 and st.session_state.pop('replace_pending', False):
-            names_in_code = _decorator_names(code)
-            for _name in names_in_code:
-                _replace_factor(_name, code)
+            items = _parse_decorators(code)
+            for _name, _kind in items:
+                _replace_factor(_name, _kind, code)
 
     st.session_state.pending = False
     st.session_state.log = result.stdout
     if result.stderr:
         st.session_state.log += '\n--- 错误 ---\n' + result.stderr
-    st.session_state.last_names = _decorator_names(code)
+    st.session_state.last_names = _parse_decorators(code)
     st.session_state.should_scroll = True
     st.rerun()
 
@@ -318,8 +313,8 @@ st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 _last = st.session_state.get('last_names', [])
 if _last:
     st.subheader('因子函数代码')
-    for _name in _last:
-        _found = _get_factor_code(_name)
+    for _name, _kind in _last:
+        _found = _get_func_code(_name, _kind)
         if _found:
             st.code(_found, language='python')
 
@@ -331,7 +326,9 @@ if names:
 
     # 指标行（从 CSV，如果有）
     na = pd.isna
-    for name in names:
+    for name, _kind in names:
+        if _kind == 'feature':
+            continue
         meta = get_factors().get(name)
         if not meta:
             continue
@@ -357,9 +354,9 @@ if names:
                     all_items.append((f'IC均值(T{h})', v_ic))
                     all_items.append((f'ICIR(T{h})', v_ir))
                 if not na(row.get('long_win')):
-                    all_items.append(('多头胜率', f"{row['long_win']:.1f}%"))
+                    all_items.append(('多头胜率', f"{row['long_win']*100:.1f}%"))
                 if not na(row.get('short_win')):
-                    all_items.append(('空头胜率', f"{row['short_win']:.1f}%"))
+                    all_items.append(('空头胜率', f"{row['short_win']*100:.1f}%"))
                 if not na(row.get('long_odds')):
                     all_items.append(('多赔率', f"{row['long_odds']:.2f}"))
                 if not na(row.get('short_odds')):
@@ -371,53 +368,67 @@ if names:
                 for i, (label, val) in enumerate(all_items):
                     _small_metric(cols[i], label, val)
 
-    # 图表（从 parquet，不受 CSV 影响）
-    for name in names:
+    # 图表
+    for name, kind in names:
+        if kind == 'feature':
+            continue
         meta = get_factors().get(name)
         if not meta:
             continue
         cat = meta.category
+        func_code = _get_func_code(name, kind)
+        _rebuild = [df is None or df[df['factor'] == name].empty]
 
-        if not data_exists(BASE, name, cat):
-            st.info(f'{name} 分析数据缺失')
-            factor_code = _get_factor_code(name)
-            if factor_code and st.button('补全数据', key=f'rebuild_{name}'):
+        def _try_chart(load_fn, render_fn, key, *args, **kwargs):
+            try:
+                data = load_fn(BASE, name, cat) if load_fn else None
+                if data is not None:
+                    st.plotly_chart(render_fn(data, name, *args, **kwargs),
+                                    width='stretch', key=key)
+                else:
+                    _rebuild[0] = True
+            except Exception:
+                _rebuild[0] = True
+
+        c1, c2 = st.columns(2)
+        with c1:
+            _try_chart(load_ic_data, render_ic_cumulative, f'ic_{name}')
+        with c2:
+            _try_chart(load_ret_data, render_long_short, f'ret_{name}')
+
+        c1, c2 = st.columns(2)
+        with c1:
+            _try_chart(load_ret_data, render_decile_bar, f'bar_{name}')
+        with c2:
+            _try_chart(load_ret_data, render_win_rate, f'win_{name}')
+
+        try:
+            ic_data = load_ic_data(BASE, name, cat)
+            if ic_data is not None:
+                hist_charts = render_ic_distribution(ic_data)
+                cols = st.columns(len(hist_charts))
+                for (h, fig), col in zip(hist_charts, cols):
+                    with col:
+                        st.plotly_chart(fig, width='stretch', key=f'hist_{name}_{h}')
+            else:
+                _rebuild[0] = True
+        except Exception:
+            _rebuild[0] = True
+
+        if _rebuild[0] and func_code:
+            st.info(f'{name} 部分分析数据缺失')
+            if st.button('补全数据', key=f'rebuild_{name}'):
                 with st.spinner('计算中...'):
-                    stdout, stderr = _run_scratch(factor_code, force=True)
+                    stdout, stderr = _run_scratch(func_code, force=True)
                     st.session_state.log = stdout
                     if stderr:
                         st.session_state.log += '\n--- 错误 ---\n' + stderr
                     st.rerun()
-            continue
-
-        ic_df = load_ic_data(BASE, name, cat)
-        ret_df = load_ret_data(BASE, name, cat)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(render_ic_cumulative(ic_df, name),
-                            width='stretch', key=f'ic_{name}')
-        with c2:
-            st.plotly_chart(render_long_short(ret_df, name),
-                            width='stretch', key=f'ret_{name}')
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(render_decile_bar(ret_df, name),
-                            width='stretch', key=f'bar_{name}')
-        with c2:
-            st.plotly_chart(render_win_rate(ret_df, name),
-                            width='stretch', key=f'win_{name}')
-
-        hist_charts = render_ic_distribution(ic_df)
-        cols = st.columns(len(hist_charts))
-        for (h, fig), col in zip(hist_charts, cols):
-            with col:
-                st.plotly_chart(fig, width='stretch', key=f'hist_{name}_{h}')
 
     # 牛熊对比（从 CSV）
     if df is not None and os.path.exists(csv_path):
-        factor_df = df[df['factor'].isin(names)]
+        _names_only = [n for n, _ in names]
+        factor_df = df[df['factor'].isin(_names_only)]
         if not factor_df.empty:
             st.subheader('牛熊对比')
             ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_T')],
@@ -434,7 +445,7 @@ if names:
                 periods = periods.rename(columns={'period': '区间'})
                 for c in ['long_win', 'short_win']:
                     if c in periods.columns:
-                        periods[c] = periods[c].apply(lambda x: f'{x:.1f}%' if pd.notna(x) else '-')
+                        periods[c] = periods[c].apply(lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-')
                 for c in ['long_odds', 'short_odds']:
                     if c in periods.columns:
                         periods[c] = periods[c].apply(lambda x: f'{x:.2f}' if pd.notna(x) else '-')
