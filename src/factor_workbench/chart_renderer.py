@@ -16,8 +16,8 @@ def load_ic_data(base_dir, name, cat):
     if not os.path.exists(path):
         return None
     df = pd.read_parquet(path)
-    df['TRADE_DATE'] = pd.to_datetime(df['TRADE_DATE'], format='%Y%m%d')
-    return df.sort_values('TRADE_DATE').reset_index(drop=True)
+    df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d')
+    return df.sort_values('trade_date').reset_index(drop=True)
 
 
 def load_ret_data(base_dir, name, cat):
@@ -40,7 +40,7 @@ def data_exists(base_dir, name, cat):
 
 def render_ic_cumulative(ic_df, name):
     """累计 Rank IC 图。"""
-    horizons = [c for c in ic_df.columns if c != 'TRADE_DATE']
+    horizons = [c for c in ic_df.columns if c != 'trade_date']
     fig = go.Figure()
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
     for h, color in zip(horizons, colors):
@@ -107,7 +107,7 @@ def render_ic_distribution(ic_df):
 
     返回 [(horizon_str, Figure)] 列表。
     """
-    horizons = [c for c in ic_df.columns if c != 'TRADE_DATE']
+    horizons = [c for c in ic_df.columns if c != 'trade_date']
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
     results = []
     for idx, h in enumerate(horizons):

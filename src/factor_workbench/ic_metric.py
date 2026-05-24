@@ -1,13 +1,37 @@
 """Rank IC 分析 + 十分组累计收益。@metric 装饰器注册。"""
 
-import warnings
+import warnings, json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import os
 from scipy.stats import spearmanr
-from framework.registry import metric
+from .registry import metric
+
+
+def _nw_std(x, max_lag):
+    """Newey-West 调整标准差，用于重叠期 IC 的标准差修正。"""
+    T = len(x)
+    mu = np.mean(x)
+    gamma_0 = np.var(x, ddof=0)
+    nw_var = gamma_0
+    for k in range(1, min(max_lag + 1, T - 2)):
+        cov = np.mean((x[k:] - mu) * (x[:-k] - mu))
+        nw_var += 2 * (1 - k / (max_lag + 1)) * cov
+    return np.sqrt(max(nw_var, 1e-10))
+
+
+def _calc_nw_icir(ic_series, horizon, ann_factor):
+    """年化 + Newey-West 调整的 ICIR。返回 (mean, nw_std, ann_icir)。"""
+    s = ic_series.dropna()
+    if len(s) < 10:
+        return np.nan, np.nan, np.nan
+    mu = np.mean(s)
+    std = _nw_std(s.values, max(0, horizon - 1))
+    icir = mu / std * ann_factor if std > 0 else np.nan
+    return mu, std, icir
+
 
 warnings.filterwarnings('ignore', message='An input array is constant')
 
@@ -17,7 +41,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 def _calc_rank_ic(df, factor_col, ret_col):
     dates, ics = [], []
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         vals = grp[[factor_col, ret_col]].dropna()
         if len(vals) < 10:
             continue
@@ -28,7 +52,7 @@ def _calc_rank_ic(df, factor_col, ret_col):
 
 def _calc_decile_rets(df, col):
     dates, rets = [], []
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15:
             continue
@@ -65,9 +89,8 @@ def _plot_ic_comp(ic_dict, label, path):
     hs = sorted(ic_dict.keys())
     means, stds, icirs = [], [], []
     for h in hs:
-        s = ic_dict[h].dropna()
-        means.append(s.mean()); stds.append(s.std())
-        icirs.append(s.mean() / s.std() if s.std() > 0 else np.nan)
+        mu, std, _ = _calc_nw_icir(ic_dict[h], h, 1)
+        means.append(mu); stds.append(std); icirs.append(mu / std if std > 0 else np.nan)
     x = np.arange(len(hs)); w = 0.28
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
     a1.bar(x - w, means, w, label='IC 均值', color='steelblue')
@@ -129,21 +152,29 @@ def ic_metric(df, col, cn_label, cat, base_path):
     for h in horizons:
         ic_dict[h] = _calc_rank_ic(df, col, f'ret_T{h}')
 
-    s = ic_dict[1].dropna()
-    ic_mean, ic_std = s.mean(), s.std()
-    icir = ic_mean / ic_std if ic_std > 0 else np.nan
-    t_stat = ic_mean / (ic_std / np.sqrt(len(s))) if ic_std > 0 else np.nan
+    # 年化：日频 √252，月频 √12
+    ann_factor = np.sqrt(12) if '/monthly/' in base_path else np.sqrt(252)
 
-    with open(f'{ic_dir}/{col}_ic.txt', 'w') as f:
-        f.write(f'因子: {col} ({cn_label})\n样本数(月): {len(s)}\n')
-        f.write(f'IC 均值: {ic_mean:.6f}\nIC 标准差: {ic_std:.6f}\nICIR: {icir:.4f}\nt 统计量: {t_stat:.4f}\n')
-        f.write(f'\n{"Horizon":>8} {"IC均值":>10} {"IC标准差":>10} {"ICIR":>10} {"t统计量":>10}\n')
+    # T+1
+    mu, std, icir = _calc_nw_icir(ic_dict[1], 1, ann_factor)
+    t_stat = mu / (std / np.sqrt(len(ic_dict[1].dropna()))) if std > 0 else np.nan
+
+    with open(f'{ic_dir}/{col}_ic.json', 'w') as f:
+        horizons_data = []
         for h in horizons:
-            s2 = ic_dict[h].dropna()
-            m, std = s2.mean(), s2.std()
-            ir = m / std if std > 0 else 0
-            t = m / (std / np.sqrt(len(s2))) if std > 0 else 0
-            f.write(f'{f"T+{h}":>8} {m:>10.6f} {std:>10.6f} {ir:>10.4f} {t:>10.4f}\n')
+            hm, hs, hir = _calc_nw_icir(ic_dict[h], h, ann_factor)
+            ht = hm / (hs / np.sqrt(len(ic_dict[h].dropna()))) if hs > 0 else 0
+            horizons_data.append({
+                'h': h, 'ic_mean': round(hm, 6), 'ic_std': round(hs, 6),
+                'icir': round(hir, 4), 't_stat': round(ht, 4),
+            })
+        json.dump({
+            'name': col, 'label': cn_label,
+            'n_months': len(ic_dict[1].dropna()),
+            'ic_mean': round(mu, 6), 'ic_std': round(std, 6),
+            'icir': round(icir, 4), 't_stat': round(t_stat, 4),
+            'horizons': horizons_data,
+        }, f, indent=2, ensure_ascii=False)
 
     _plot_cumulative_ic(ic_dict, cn_label, f'{ic_dir}/ic_cum.png')
     _plot_ic_ts(ic_dict, cn_label, f'{ic_dir}/ic_ts.png')
@@ -161,8 +192,8 @@ def ic_metric(df, col, cn_label, cat, base_path):
     fig.tight_layout(); fig.savefig(f'{ic_dir}/ic_dist.png', dpi=150); plt.close(fig)
 
     ic_df = pd.DataFrame({f'T+{h}': ic_dict[h] for h in horizons}).reset_index()
-    ic_df.columns = ['TRADE_DATE'] + [f'T+{h}' for h in horizons]
-    ic_df['TRADE_DATE'] = ic_df['TRADE_DATE'].dt.strftime('%Y%m%d')
+    ic_df.columns = ['trade_date'] + [f'T+{h}' for h in horizons]
+    ic_df['trade_date'] = ic_df['trade_date'].dt.strftime('%Y%m%d')
     ic_df.to_parquet(f'{ic_dir}/{col}_ic.parquet', index=False)
 
     decile_rets = _calc_decile_rets(df, col)
@@ -171,7 +202,10 @@ def ic_metric(df, col, cn_label, cat, base_path):
     _plot_decile_bar(decile_rets, cn_label, f'{ret_dir}/ret_decile_bar.png')
     _plot_long_short(decile_rets, cn_label, f'{ret_dir}/ret_long_short.png')
     ret_mean = decile_rets.mean()
-    with open(f'{ret_dir}/{col}_ret.txt', 'w') as f:
-        f.write(f'ret_D1={ret_mean[0]:.8f}\nret_D10={ret_mean[9]:.8f}\n'
-                f'ret_spread={ret_mean[9] - ret_mean[0]:.8f}\n')
+    with open(f'{ret_dir}/{col}_ret.json', 'w') as f:
+        json.dump({
+            'ret_D1': round(float(ret_mean[0]), 8),
+            'ret_D10': round(float(ret_mean[9]), 8),
+            'ret_spread': round(float(ret_mean[9] - ret_mean[0]), 8),
+        }, f, indent=2, ensure_ascii=False)
     print(f'  [{col}] 完成')

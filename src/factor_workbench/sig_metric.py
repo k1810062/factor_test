@@ -3,9 +3,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import os
+import os, json
 from scipy.stats import norm
-from framework.registry import metric
+from .registry import metric
 
 plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'PingFang SC', 'Heiti TC', 'WenQuanYi Micro Hei']
 plt.rcParams['axes.unicode_minus'] = False
@@ -37,16 +37,14 @@ def sig_metric(df, col, cn_label, cat, base_path):
     acf1_mean = np.mean(acf1_by_ind) if acf1_by_ind else np.nan
     acf1_std = np.std(acf1_by_ind) if acf1_by_ind else np.nan
 
-    with open(f'{base}_sig.txt', 'w') as f:
-        f.write(f'因子: {col} ({cn_label})\n')
-        f.write(f'超额峰度: {excess_kurt:.4f}\n')
-        f.write(f'行业数: {n_ind}\n')
-        f.write(f'ACF(1) 均值: {acf1_mean:.6f}\n')
-        f.write(f'ACF(1) 标准差: {acf1_std:.6f}\n')
+    with open(f'{base}_sig.json', 'w') as f:
+        d = {'excess_kurt': round(excess_kurt, 4), 'n_industries': n_ind,
+             'acf1_mean': round(acf1_mean, 6), 'acf1_std': round(acf1_std, 6)}
         if acf1_by_ind:
-            f.write(f'ACF(1) 25%分位: {np.percentile(acf1_by_ind, 25):.6f}\n')
-            f.write(f'ACF(1) 50%分位: {np.percentile(acf1_by_ind, 50):.6f}\n')
-            f.write(f'ACF(1) 75%分位: {np.percentile(acf1_by_ind, 75):.6f}\n')
+            d['acf1_p25'] = round(float(np.percentile(acf1_by_ind, 25)), 6)
+            d['acf1_p50'] = round(float(np.percentile(acf1_by_ind, 50)), 6)
+            d['acf1_p75'] = round(float(np.percentile(acf1_by_ind, 75)), 6)
+        json.dump(d, f, indent=2, ensure_ascii=False)
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.hist(valid, bins=50, density=True, alpha=0.7, color='steelblue', edgecolor='white', label='实际分布')

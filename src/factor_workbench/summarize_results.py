@@ -2,8 +2,14 @@
 import pandas as pd
 import json, os, re, glob
 
-OUT_DIR = 'output'
-DATA_DIR = 'output/data_processed'
+def _output_dir():
+    """从配置文件读输出目录，没有则默认 'output'。"""
+    try:
+        cfg = load_config()
+        analysis_dir = cfg.get('analysis_dir', 'output/factor_analysis')
+        return os.path.dirname(analysis_dir)
+    except Exception:
+        return 'output'
 
 
 def load_config():
@@ -16,14 +22,14 @@ def load_config():
 
 def get_periods(cfg):
     """返回 [(周期名, 分析目录), ...]"""
-    periods = [('full', f'{OUT_DIR}/factor_analysis')]
+    periods = [('full', f'{_output_dir()}/factor_analysis')]
     sp = cfg.get('sub_period', {})
     if 'from_file' in sp:
         ext = json.load(open(sp['from_file']))
         names = sp.get('groups', list(ext.keys()))
         for name in names:
             suffix = ext[name]['suffix']
-            periods.append((suffix, f'{OUT_DIR}/factor_analysis_{suffix}'))
+            periods.append((suffix, f'{_output_dir()}/factor_analysis_{suffix}'))
     return periods
 
 
@@ -39,118 +45,68 @@ def get_factors(cfg):
 
 
 def read_ic(factor_dir, col):
-    """解析 IC 文本，返回各 horizon 的 ic_mean 和 icir。"""
-    path = f'{factor_dir}/ic/{col}_ic.txt'
+    """读 IC JSON，返回各 horizon 的 ic_mean 和 icir。"""
+    path = f'{factor_dir}/ic/{col}_ic.json'
     if not os.path.exists(path):
         return {}
-    text = open(path).read()
-    result = {}
-    # 段落：T+1（所有因子都有）
-    m = re.search(r'IC 均值:\s+([\d.-]+)', text)
-    if m:
-        result['ic_T1'] = float(m.group(1))
-    m = re.search(r'ICIR:\s+([\d.-]+)', text)
-    if m:
-        result['icir_T1'] = float(m.group(1))
-    # 表格：T+5 / T+10 / T+22（只有日度因子有）
-    for h in [5, 10, 22]:
-        m = re.search(rf'T\+{h}\s+([\d.-]+)\s+[\d.-]+\s+([\d.-]+)', text)
-        if m:
-            result[f'ic_T{h}'] = float(m.group(1))
-            result[f'icir_T{h}'] = float(m.group(2))
+    data = json.load(open(path))
+    result = {'ic_T1': data['ic_mean'], 'icir_T1': data['icir']}
+    for h in data.get('horizons', []):
+        result[f'ic_T{h["h"]}'] = h['ic_mean']
+        result[f'icir_T{h["h"]}'] = h['icir']
     return result
 
 
 def read_rr(factor_dir, col):
-    """解析 RR 文本，返回胜率和尾部赔率。兼容新旧格式。"""
-    path = f'{factor_dir}/rr/{col}_rr.txt'
+    """读 RR JSON，返回胜率和尾部赔率。"""
+    path = f'{factor_dir}/rr/{col}_rr.json'
     if not os.path.exists(path):
         return {}
-    text = open(path).read()
-    result = {}
-    # 新格式：多头胜率: 48.51% / 空头胜率: 51.97%
-    m = re.search(r'多头胜率:\s+([\d.-]+)%', text)
-    if m:
-        result['long_win'] = float(m.group(1)) / 100
-    m = re.search(r'空头胜率:\s+([\d.-]+)%', text)
-    if m:
-        result['short_win'] = float(m.group(1)) / 100
-    m = re.search(r'多头尾赔率:\s+([\d.-]+)', text)
-    if m:
-        result['long_odds'] = float(m.group(1))
-    m = re.search(r'空头尾赔率:\s+([\d.-]+)', text)
-    if m:
-        result['short_odds'] = float(m.group(1))
-    # 旧格式：表格形式
-    if 'long_win' not in result:
-        m = re.search(r'胜率\s+([\d.]+)\s+([\d.]+)', text)
-        if m:
-            result['long_win'] = float(m.group(1))
-            result['short_win'] = float(m.group(2))
-        m = re.search(r'尾部赔率\s+([\d.]+)\s+([\d.]+)', text)
-        if m:
-            result['long_odds'] = float(m.group(1))
-            result['short_odds'] = float(m.group(2))
-    return result
+    return json.load(open(path))
 
 
 def read_sig(factor_dir, col):
-    """解析 SIG 文本，返回峰度和 ACF。兼容新旧格式。"""
-    path = f'{factor_dir}/sig/{col}_sig.txt'
+    """读 SIG JSON，返回峰度和 ACF。"""
+    path = f'{factor_dir}/sig/{col}_sig.json'
     if not os.path.exists(path):
         return {}
-    text = open(path).read()
-    result = {}
-    # 新格式：超额峰度: 10.1266  旧格式：峰度 (超额): 2.332
-    m = re.search(r'超额峰度:\s+([\d.-]+)', text)
-    if m:
-        result['kurtosis'] = float(m.group(1))
-    if 'kurtosis' not in result:
-        m = re.search(r'峰度 \(超额\):\s+([\d.-]+)', text)
-        if m:
-            result['kurtosis'] = float(m.group(1))
-    m = re.search(r'ACF\(1\) 均值:\s+([\d.-]+)', text)
-    if m:
-        result['acf1_mean'] = float(m.group(1))
-    m = re.search(r'ACF\(1\) 标准差:\s+([\d.-]+)', text)
-    if not m:
-        m = re.search(r'标准差:\s+([\d.-]+)', text)
-    if m:
-        result['acf1_std'] = float(m.group(1))
+    data = json.load(open(path))
+    result = {
+        'kurtosis': data.get('excess_kurt', data.get('kurtosis', 0)),
+        'acf1_mean': data.get('acf1_mean', 0),
+        'acf1_std': data.get('acf1_std', 0),
+    }
     return result
 
 
 def read_ret(factor_dir, col):
-    """解析 ret 文本，返回十分组收益。"""
-    path = f'{factor_dir}/ret/{col}_ret.txt'
+    """读 RET JSON，返回十分组收益。"""
+    path = f'{factor_dir}/ret/{col}_ret.json'
     if not os.path.exists(path):
         return {}
-    result = {}
-    for line in open(path):
-        k, v = line.strip().split('=')
-        result[k] = float(v)
-    return result
+    return json.load(open(path))
 
 
 def _parse_label(factor_dir, col):
-    """从 IC/RR/SIG 文本中解析因子中文名。"""
-    for txt in (f'{factor_dir}/ic/{col}_ic.txt',
-                f'{factor_dir}/rr/{col}_rr.txt',
-                f'{factor_dir}/sig/{col}_sig.txt'):
-        if os.path.exists(txt):
-            m = re.search(rf'{re.escape(col)}\s*\((.+?)\)', open(txt).read())
-            if m:
-                return m.group(1)
+    """从 IC JSON 中解析因子中文名。"""
+    for p in (f'{factor_dir}/ic/{col}_ic.json',
+              f'{factor_dir}/rr/{col}_rr.json',
+              f'{factor_dir}/sig/{col}_sig.json'):
+        if os.path.exists(p):
+            data = json.load(open(p))
+            label = data.get('label', '')
+            if label:
+                return label
     return col
 
 
 def scan_factors():
     """扫描分析目录，所有有分析结果的因子全纳入。"""
     factors = set()
-    for ic_file in glob.glob(f'{OUT_DIR}/factor_analysis/*/*/ic/*_ic.txt'):
-        col = os.path.basename(ic_file).replace('_ic.txt', '')
+    for ic_file in glob.glob(f'{_output_dir()}/factor_analysis/*/*/ic/*_ic.json'):
+        col = os.path.basename(ic_file).replace('_ic.json', '')
         cat = ic_file.split('/')[-4]
-        factor_dir = f'{OUT_DIR}/factor_analysis/{cat}/{col}'
+        factor_dir = f'{_output_dir()}/factor_analysis/{cat}/{col}'
         label = _parse_label(factor_dir, col)
         factors.add((col, label, cat))
     return list(factors)
@@ -159,7 +115,7 @@ def scan_factors():
 def main():
     cfg = load_config()
     periods = get_periods(cfg)
-    out_path = f'{OUT_DIR}/result/factor_summary.csv'
+    out_path = f'{_output_dir()}/result/factor_summary.csv'
 
     # 读已有汇总表（如果存在）
     old_rows = {}
@@ -214,8 +170,8 @@ def main():
         if c in pct_cols:
             df[c] = df[c] * 100
         df[c] = df[c].round(4)
-    os.makedirs(f'{OUT_DIR}/result', exist_ok=True)
-    out_path = f'{OUT_DIR}/result/factor_summary.csv'
+    os.makedirs(f'{_output_dir()}/result', exist_ok=True)
+    out_path = f'{_output_dir()}/result/factor_summary.csv'
     df.to_csv(out_path, index=False, float_format='%.4f', encoding='utf-8-sig')
     print(f'汇总表保存: {len(df)} 行, {len(df.columns)} 列 → {out_path}')
 

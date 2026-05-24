@@ -3,8 +3,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-from framework.registry import metric
+import os, json
+from .registry import metric
 
 plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'PingFang SC', 'Heiti TC', 'WenQuanYi Micro Hei']
 plt.rcParams['axes.unicode_minus'] = False
@@ -17,7 +17,7 @@ def _calc_rr(df, col, base_path):
     long_wins, short_wins = [], []
     long_odds_list, short_odds_list = [], []
 
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15:
             continue
@@ -42,12 +42,16 @@ def _calc_rr(df, col, base_path):
     long_odds = np.mean(long_odds_list) if long_odds_list else np.nan
     short_odds = np.mean(short_odds_list) if short_odds_list else np.nan
 
-    with open(f'{sub_dir}/{col}_rr.txt', 'w') as f:
-        f.write(f'多头胜率: {long_win:.4%}\n空头胜率: {short_win:.4%}\n')
-        f.write(f'多头尾赔率: {long_odds:.4f}\n空头尾赔率: {short_odds:.4f}\n')
+    with open(f'{sub_dir}/{col}_rr.json', 'w') as f:
+        json.dump({
+            'long_win': round(long_win, 6),
+            'short_win': round(short_win, 6),
+            'long_odds': round(long_odds, 4),
+            'short_odds': round(short_odds, 4),
+        }, f, indent=2, ensure_ascii=False)
 
     win_rates = []
-    for date, grp in df.groupby('TRADE_DATE'):
+    for date, grp in df.groupby('trade_date'):
         grp = grp.dropna(subset=[col, 'ret_T1'])
         if len(grp) < 15:
             continue

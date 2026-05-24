@@ -1,12 +1,42 @@
 {
-  "industry": {
-    "ret_5d": {
-      "cat": "pv",
-      "label": "5日涨幅",
-      "mode": "skip"
-    }
+  "tables": {
+    "stock_daily": "data/stock_daily.parquet",
+    "etf_daily": "data/etf_daily.parquet",
+    "stock_features": "output/feature_library/stock.parquet",
+    "industry_daily": "output/factor_library/industry.parquet",
+    "industry_monthly": "output/factor_library/industry_monthly.parquet",
+    "industry_price": "data/industry_price.parquet",
+    "index_daily": "/Users/wby/k/factor_test/factor_system/data/index_daily.parquet",
+    "stock": "/Users/wby/k/factor_test/factor_system/output/feature_library/stock.parquet",
+    "industry": "/Users/wby/k/factor_test/factor_system/output/factor_library/industry.parquet"
   },
+  "output_paths": {
+    "stock": "output/factor_library/stock.parquet",
+    "industry": "output/factor_library/industry.parquet",
+    "industry_monthly": "output/factor_library/industry_monthly.parquet"
+  },
+  "key_cols": {
+    "stock": [
+      "stock_code",
+      "trade_date"
+    ],
+    "industry": [
+      "industry_code",
+      "trade_date"
+    ],
+    "industry_monthly": [
+      "industry_code",
+      "ym"
+    ]
+  },
+  "analysis_dir": "output/factor_analysis",
   "analysis": [
+    "charts",
+    "ic",
+    "rr",
+    "sig"
+  ],
+  "analysis_overwrite": [
     "charts",
     "ic",
     "rr",

@@ -5,20 +5,28 @@ import os
 import shutil
 import glob
 import pandas as pd
-from framework.registry import get_metrics
+from .registry import get_metrics
+
+
+def _load_factors(factor_type):
+    """从 factors.config 读指定 domain 的因子列表。"""
+    path = 'config/factors_config.json'
+    if not os.path.exists(path):
+        return {}
+    return json.load(open(path)).get(factor_type, {})
 
 
 def _get_overwrite(cfg, factor_type, col):
-    src = cfg.get(factor_type) or cfg.get(f'{factor_type}_factors', {})
+    src = _load_factors(factor_type)
     return src.get(col, {}).get('overwrite', [])
 
 
-def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
+def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
     """对所有因子运行配置中的评价指标（串行）。"""
-    out_dir = 'output'
-    analysis_dir = f'{out_dir}/factor_analysis'
+    analysis_dir = cfg.get('analysis_dir', 'output/factor_analysis')
+    base_dir = os.path.dirname(analysis_dir)
 
-    src = cfg.get(factor_type) or cfg.get(f'{factor_type}_factors', {})
+    src = _load_factors(factor_type)
     factors = [(k, v['label'], v['cat']) for k, v in src.items()]
     if not factors:
         return
@@ -31,10 +39,10 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
     global_ow = cfg.get('analysis_overwrite', [])
     if check_subdir and check_subdir in global_ow:
         for col, _, cat in factors:
-            for chk in glob.glob(f'{out_dir}/factor_analysis*/{cat}/{col}/{check_subdir}'):
+            for chk in glob.glob(f'{base_dir}/factor_analysis*/{cat}/{col}/{check_subdir}'):
                 if os.path.isdir(chk):
                     shutil.rmtree(chk)
-                    print(f'  [覆盖] {os.path.relpath(chk, out_dir)}')
+                    print(f'  [覆盖] {os.path.relpath(chk, base_dir)}')
 
     def _skip_factor(d, col):
         chk = f'{d}/{check_subdir}' if check_subdir else d
@@ -55,7 +63,8 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
         print(f'  [{col}] 完成')
 
     # ---- 子区间分析 ----
-    sp = cfg.get('sub_period', {})
+    sp = cfg.get('sub_period', {'from_file': 'data/market_periods.json',
+                                 'groups': ['bull', 'bear', 'consolidate']})
     if 'from_file' in sp:
         ext = json.load(open(sp['from_file']))
         names = sp.get('groups', list(ext.keys()))
@@ -93,7 +102,7 @@ def run_metrics(cfg, factor_type, df, date_col='TRADE_DATE', check_subdir=None):
             print(f'  [{suffix}] 无数据，跳过')
             continue
 
-        sub_dir = f'{out_dir}/factor_analysis_{suffix}'
+        sub_dir = f'{base_dir}/factor_analysis_{suffix}'
         os.makedirs(sub_dir, exist_ok=True)
         print(f'\n=== 子区间分析：{suffix} ===')
         for col, cn, cat in factors:

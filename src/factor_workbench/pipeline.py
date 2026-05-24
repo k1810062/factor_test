@@ -9,31 +9,10 @@ import time
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from framework.data_api import DataAPI
-from framework.registry import get_factors
-from framework.metric_runner import run_metrics
-import factors.stock_factors
-import factors.industry_factors
-import factors.monthly_factors
-import metrics.chart_metric
-import metrics.ic_metric
-import metrics.rr_metric
-import metrics.sig_metric
-
-# 各 domain 的输出路径
-OUTPUT_PATHS = {
-    'stock':    'output/data_processed/factor_stock.parquet',
-    'industry': 'output/data_processed/industry_daily_ratio.parquet',
-    'monthly':  'output/data_processed/industry_monthly_ratio.parquet',
-}
-
-# 各 domain 的 key 列
-KEY_COLS = {
-    'stock':    ['STOCK_CODE', 'TRADE_DATE'],
-    'industry': ['industry_code', 'TRADE_DATE'],
-    'monthly':  ['industry_code', 'ym'],
-}
-
+from .data_api import DataAPI
+from .registry import get_factors, get_features, load_factor_modules
+from .metric_runner import run_metrics
+from . import chart_metric, ic_metric, rr_metric, sig_metric
 
 def _try_read(path):
     try:
@@ -42,19 +21,18 @@ def _try_read(path):
         return None
 
 
-def _factor_worker(domain, name, backend):
+def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
-    import importlib
-    importlib.import_module(f'factors.{domain}_factors')
-    from framework.registry import get_factors
-    from framework.data_api import DataAPI
+    from factor_workbench.registry import get_factors, get_features
+    from factor_workbench.data_api import DataAPI
 
     factors = get_factors(domain=domain)
+    factors.update(get_features(domain=domain))
     meta = factors.get(name)
     if meta is None:
         return name, None
 
-    api = DataAPI(backend=backend)
+    api = DataAPI(backend=backend, tables=tables)
     try:
         df = meta.fn(api)
         return name, df
@@ -65,23 +43,32 @@ def _factor_worker(domain, name, backend):
 
 
 class Pipeline:
-    def __init__(self, config_path, backend='duckdb'):
+    def __init__(self, config_path, backend='duckdb', load_analysis_data=None):
         self.cfg = json.load(open(config_path))
         self.backend = backend
-        self.api = DataAPI(backend=backend)
+        self.api = DataAPI(backend=backend, tables=self.cfg.get('tables'))
+        self._load_data_fn = load_analysis_data
+        load_factor_modules(['factors', 'features'])
 
     def run(self):
         """全流程入口。"""
         t0 = time.time()
 
-        for domain in ('stock', 'industry', 'monthly'):
-            selected = self.cfg.get(domain, {})
-            if not selected:
-                continue
-            print(f'\n=== {domain} 因子计算 ===')
-            self._compute_domain(domain, selected)
+        # 计算特征（存 feature_library）
+        if os.path.exists('config/features_config.json'):
+            for domain, factors in json.load(open('config/features_config.json')).items():
+                self.cfg['output_paths'][domain] = f'output/feature_library/{domain}.parquet'
+                print(f'\n=== {domain} 特征计算 ===')
+                self._compute_domain(domain, factors)
 
-        # 分析（复用现有分析流程）
+        # 计算因子（存 factor_library）
+        if os.path.exists('config/factors_config.json'):
+            for domain, factors in json.load(open('config/factors_config.json')).items():
+                self.cfg['output_paths'][domain] = f'output/factor_library/{domain}.parquet'
+                print(f'\n=== {domain} 因子计算 ===')
+                self._compute_domain(domain, factors)
+
+        # 分析
         if self.cfg.get('analysis'):
             print('\n=== 分析 ===')
             self._run_analysis()
@@ -94,8 +81,8 @@ class Pipeline:
 
     def _compute_domain(self, domain, selected):
         """计算一个 domain 的所有选中因子。增量 + 并行。"""
-        key_cols = KEY_COLS[domain]
-        output_path = OUTPUT_PATHS[domain]
+        key_cols = self.cfg['key_cols'][domain]
+        output_path = self.cfg['output_paths'][domain]
 
         # 读已有数据
         existing = _try_read(output_path)
@@ -104,8 +91,9 @@ class Pipeline:
         else:
             existing_cols = set()
 
-        # 过滤出需要计算的
+        # 过滤出需要计算的（因子+特征）
         factors = get_factors(domain=domain)
+        factors.update(get_features(domain=domain))
         to_compute = []
         overwrite_names = set()
 
@@ -138,15 +126,16 @@ class Pipeline:
         results = {}
         n_workers = min(os.cpu_count() or 4, len(to_compute))
 
+        fdir = self.cfg.get('factor_dir', 'factors')
+        tbls = self.cfg.get('tables', {})
         if len(to_compute) == 1 or n_workers == 1:
-            # 串行
             for name in to_compute:
-                r = _factor_worker(domain, name, self.backend)
+                r = _factor_worker(domain, name, self.backend, fdir, tbls)
                 results[name] = r[1]
         else:
             with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futures = {
-                    pool.submit(_factor_worker, domain, name, self.backend): name
+                    pool.submit(_factor_worker, domain, name, self.backend, fdir, tbls): name
                     for name in to_compute
                 }
                 for future in as_completed(futures):
@@ -193,8 +182,9 @@ class Pipeline:
         if not analysis:
             return
 
-        for factor_type in ('industry', 'monthly'):
-            date_col = 'ym' if factor_type == 'monthly' else 'TRADE_DATE'
+        fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
+        for factor_type in fc_domains:
+            date_col = 'ym' if 'monthly' in str(factor_type) else 'trade_date'
             df = self._load_analysis_data(factor_type)
             if df is None:
                 continue
@@ -205,29 +195,39 @@ class Pipeline:
                 print(f'  [{name}] 耗时: {time.time()-t0:.1f}s')
 
     def _load_analysis_data(self, factor_type):
-        """加载分析用的数据（因子值 + 指数 + 前向收益）。"""
+        """加载分析用的数据。支持外部自定义函数。"""
+        if self._load_data_fn:
+            return self._load_data_fn(self.api, factor_type)
         if factor_type == 'industry':
             df = self.api.table('industry_daily', columns=None)
             # 合并指数数据算前向收益
-            idx = self.api.table('swi_daily', columns=['STOCK_CODE', 'TRADE_DATE', 'CLOSE'])
-            idx = idx.rename(columns={'STOCK_CODE': 'industry_code', 'CLOSE': 'idx_close'})
-            df = df.merge(idx, on=['industry_code', 'TRADE_DATE'], how='inner')
-            df = df.sort_values(['industry_code', 'TRADE_DATE']).reset_index(drop=True)
+            idx = self.api.table('industry_price', columns=['industry_code', 'trade_date', 'close'])
+            idx = idx.rename(columns={'close': 'idx_close'})
+            df = df.merge(idx, on=['industry_code', 'trade_date'], how='inner')
+            df = df.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
             g = df.groupby('industry_code')['idx_close']
             for h in (1, 5, 10, 22):
                 df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
             return df
-        elif factor_type == 'monthly':
+        elif 'monthly' in str(factor_type):
             df = self.api.table('industry_monthly', columns=None)
-            if 'ym' in df.columns:
-                return df
-            # 没有 ym 说明不是月度数据
-            return None
+            if 'ym' not in df.columns:
+                return None
+            # 月末指数收盘价 → 次月收益
+            idx = self.api.table('industry_price', columns=['industry_code', 'trade_date', 'close'])
+            idx = idx.rename(columns={'close': 'idx_close'})
+            idx = idx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
+            idx['ym'] = idx['trade_date'].str[:6]
+            monthly = idx.groupby(['industry_code', 'ym']).tail(1).copy()
+            monthly['ret_T1'] = monthly.groupby('industry_code')['idx_close'].transform(
+                lambda x: x.shift(-1) / x - 1)
+            df = df.merge(monthly[['industry_code', 'ym', 'ret_T1']], on=['industry_code', 'ym'], how='left')
+            return df
         return None
 
     def _run_summary(self):
         """生成汇总表。"""
-        from analysis.summarize_results import main as summary_main
+        from factor_workbench.summarize_results import main as summary_main
         summary_main()
 
     def close(self):
