@@ -124,8 +124,13 @@ def main():
         for _, row in old_df.iterrows():
             old_rows[(row['factor'], row['period'])] = row.to_dict()
 
-    # 读分析文件，更新或追加
-    factors = scan_factors()
+    # 从 factors_config 读因子列表（而不是扫分析目录）
+    factors = []
+    if os.path.exists('config/factors_config.json'):
+        fc = json.load(open('config/factors_config.json'))
+        for domain, fdict in fc.items():
+            for name, meta in fdict.items():
+                factors.append((name, meta.get('label', ''), meta.get('cat', domain)))
     for col, label, cat in factors:
         for period_name, base_path in periods:
             factor_dir = f'{base_path}/{cat}/{col}'

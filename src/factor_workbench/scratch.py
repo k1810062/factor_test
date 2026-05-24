@@ -9,7 +9,7 @@
 import sys, os, json, re
 
 # 首次运行自动生成 config
-from .auto_config import generate_config
+from .analysis.auto_config import generate_config
 generate_config()
 
 CONFIG_PATH = 'config/config.json'
@@ -101,8 +101,8 @@ def main():
 
     # 跑 Pipeline（先初始化再注册，防止文件中的旧版覆盖新版）
     print('\n=== 运行 Pipeline ===')
-    from .pipeline import Pipeline
-    from .registry import factor, feature
+    from .engine.pipeline import Pipeline
+    from .engine.registry import factor, feature
     p = Pipeline(CONFIG_PATH, backend='duckdb')
     exec(compile(open(path).read(), path, 'exec'), {'factor': factor, 'feature': feature})
 

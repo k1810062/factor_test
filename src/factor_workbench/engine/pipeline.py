@@ -12,7 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from .data_api import DataAPI
 from .registry import get_factors, get_features, load_factor_modules
 from .metric_runner import run_metrics
-from . import chart_metric, ic_metric, rr_metric, sig_metric
+from ..metrics import chart_metric, ic_metric, rr_metric, sig_metric
 
 def _try_read(path):
     try:
@@ -23,8 +23,9 @@ def _try_read(path):
 
 def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
-    from factor_workbench.registry import get_factors, get_features
-    from factor_workbench.data_api import DataAPI
+    from factor_workbench.engine.registry import get_factors, get_features, load_factor_modules
+    from factor_workbench.engine.data_api import DataAPI
+    load_factor_modules(['factors', 'features'])
 
     factors = get_factors(domain=domain)
     factors.update(get_features(domain=domain))
@@ -227,7 +228,7 @@ class Pipeline:
 
     def _run_summary(self):
         """生成汇总表。"""
-        from factor_workbench.summarize_results import main as summary_main
+        from factor_workbench.analysis.summarize_results import main as summary_main
         summary_main()
 
     def close(self):

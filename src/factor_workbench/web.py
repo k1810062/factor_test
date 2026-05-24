@@ -8,13 +8,13 @@ import streamlit as st
 import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
 
-from factor_workbench.chart_renderer import (
+from factor_workbench.analysis.chart_renderer import (
     load_ic_data, load_ret_data, data_exists,
     render_ic_cumulative, render_long_short,
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
-from factor_workbench.registry import get_factors, load_factor_modules
-from factor_workbench.auto_config import generate_config
+from factor_workbench.engine.registry import get_factors, load_factor_modules
+from factor_workbench.analysis.auto_config import generate_config
 
 BASE = os.getcwd()
 generate_config()
@@ -62,6 +62,26 @@ def _find_func(txt, name):
                 nxt = len(txt)
             return i, nxt
     return None
+
+
+def _decorator_names(code):
+    """从代码中提取 @factor/@feature 的 name 参数。"""
+    import ast
+    try:
+        tree = ast.parse(code)
+        names = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.decorator_list:
+                dec = node.decorator_list[0]
+                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id in ('factor', 'feature'):
+                    for kw in dec.keywords:
+                        if kw.arg == 'name':
+                            names.append(ast.literal_eval(kw.value))
+                            break
+        return names
+    except SyntaxError:
+        return re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
+
 
 
 def _get_factor_code(name):
@@ -277,25 +297,6 @@ if st.session_state.get('pending'):
         cmd.append(tmp_path)
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE)
         os.unlink(tmp_path)
-
-def _decorator_names(code):
-    """从代码中提取 @factor/@feature 的 name 参数。"""
-    import ast
-    try:
-        tree = ast.parse(code)
-        names = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.decorator_list:
-                dec = node.decorator_list[0]
-                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id in ('factor', 'feature'):
-                    for kw in dec.keywords:
-                        if kw.arg == 'name':
-                            names.append(ast.literal_eval(kw.value))
-                            break
-        return names
-    except SyntaxError:
-        return re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
-
 
         # pipeline 跑成功后才执行代码替换
         if result.returncode == 0 and st.session_state.pop('replace_pending', False):

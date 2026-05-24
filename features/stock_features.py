@@ -1,14 +1,8 @@
 """特征（中间量）函数库。每个特征加 @feature 装饰器，只计算不分析。
 """
 
-import pandas as pd
-import numpy as np
-from factor_workbench.registry import feature
-
-
 def _fib_ma(df, n):
     return df.groupby('stock_code')['close'].transform(lambda x: x.rolling(n).mean())
-
 
 @feature(name='up_stock', domain='stock')
 def up_stock(api):
@@ -17,14 +11,12 @@ def up_stock(api):
     result = np.where(close_diff.notna(), (close_diff > 0).astype(int), np.nan)
     return df[['stock_code', 'trade_date']].assign(up_stock=result)
 
-
 @feature(name='strong_stock', domain='stock')
 def strong_stock(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     ma60 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(60).mean())
     result = np.where(pd.notna(ma60), (df['close'] > ma60).astype(int), np.nan)
     return df[['stock_code', 'trade_date']].assign(strong_stock=result)
-
 
 @feature(name='strong_volume', domain='stock')
 def strong_volume(api):
@@ -37,7 +29,6 @@ def strong_volume(api):
     trim_mean = np.where(cnt20 >= 3, (s20 - min20 - max20) / (cnt20 - 2), np.nan)
     result = np.where(pd.notna(trim_mean), (df['vol'] / trim_mean > 1.06).astype(int), np.nan)
     return df[['stock_code', 'trade_date']].assign(strong_volume=result)
-
 
 @feature(name='ma8_pos', domain='stock')
 def ma8_pos(api):
@@ -58,14 +49,12 @@ def ma8_pos(api):
         df.drop(columns=[c], inplace=True)
     return df[['stock_code', 'trade_date']].assign(ma8_pos=result)
 
-
 @feature(name='tech_sync', domain='stock')
 def tech_sync(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
     ma20 = df.groupby('stock_code')['close'].transform(lambda x: x.rolling(20).mean())
     result = np.where(pd.notna(ma20), (df['close'] > ma20).astype(int), np.nan)
     return df[['stock_code', 'trade_date']].assign(tech_sync=result)
-
 
 @feature(name='ma_bull', domain='stock')
 def ma_bull(api):
@@ -77,7 +66,6 @@ def ma_bull(api):
     result = np.where(ok & (ma5 > ma10) & (ma10 > ma20), 1, np.where(ok, 0, np.nan))
     return df[['stock_code', 'trade_date']].assign(ma_bull=result)
 
-
 @feature(name='ma_bear', domain='stock')
 def ma_bear(api):
     df = api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])
@@ -87,7 +75,6 @@ def ma_bear(api):
     ok = pd.notna(ma5)
     result = np.where(ok & (ma5 < ma10) & (ma10 < ma20), 1, np.where(ok, 0, np.nan))
     return df[['stock_code', 'trade_date']].assign(ma_bear=result)
-
 
 @feature(name='break_cons', domain='stock')
 def break_cons(api):
