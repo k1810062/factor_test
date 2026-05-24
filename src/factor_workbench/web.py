@@ -64,30 +64,27 @@ def _find_func(txt, name):
     return None
 
 
-def _decorator_names(code):
-    """从代码中提取 @factor/@feature 的 name 参数。"""
+def _parse_decorators(code):
+    """从代码中提取 (name, kind) 列表。识别所有 @xxx(name=...) 格式。"""
     import ast
-    try:
-        tree = ast.parse(code)
-        names = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.decorator_list:
-                dec = node.decorator_list[0]
-                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id in ('factor', 'feature'):
-                    for kw in dec.keywords:
-                        if kw.arg == 'name':
-                            names.append(ast.literal_eval(kw.value))
-                            break
-        return names
-    except SyntaxError:
-        return re.findall(r"@(?:factor|feature)\(name='(\w+)'", code)
+    tree = ast.parse(code)
+    items = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.decorator_list:
+            dec = node.decorator_list[0]
+            if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
+                name = next((ast.literal_eval(kw.value) for kw in dec.keywords if kw.arg == 'name'), None)
+                if name:
+                    items.append((name, dec.func.id))
+    return items
 
 
 
-def _get_factor_code(name):
-    """从文件提取 @factor/@feature 函数代码。"""
+def _get_func_code(name, kind):
+    """从对应类型目录提取函数代码。"""
     import glob
-    for f in sorted(glob.glob(f'{BASE}/factors/*.py') + glob.glob(f'{BASE}/features/*.py')):
+    base = 'features' if kind == 'feature' else 'factors'
+    for f in sorted(glob.glob(f'{BASE}/{base}/*.py')):
         if not os.path.exists(f):
             continue
         r = _find_func(open(f).read(), name)
@@ -110,13 +107,11 @@ def _extract_func(code, name, kind='factor'):
     return code[i:nxt].strip()
 
 
-def _replace_factor(name, code):
-    """替换文件中的同名函数。按类型优先搜索对应文件。"""
-    kind = 'feature' if f"@feature(name='{name}'" in code else 'factor'
+def _replace_factor(name, kind, code):
+    """替换文件中的同名函数。优先搜索对应类型目录。"""
     func_code = _extract_func(code, name, kind)
     if not func_code:
         return
-    # 特征优先 features.py，因子优先 industry/monthly
     import glob
     base = os.path.join(BASE, 'features') if kind == 'feature' else os.path.join(BASE, 'factors')
     other = os.path.join(BASE, 'features') if kind != 'feature' else os.path.join(BASE, 'factors')
@@ -300,15 +295,15 @@ if st.session_state.get('pending'):
 
         # pipeline 跑成功后才执行代码替换
         if result.returncode == 0 and st.session_state.pop('replace_pending', False):
-            names_in_code = _decorator_names(code)
-            for _name in names_in_code:
-                _replace_factor(_name, code)
+            items = _parse_decorators(code)
+            for _name, _kind in items:
+                _replace_factor(_name, _kind, code)
 
     st.session_state.pending = False
     st.session_state.log = result.stdout
     if result.stderr:
         st.session_state.log += '\n--- 错误 ---\n' + result.stderr
-    st.session_state.last_names = _decorator_names(code)
+    st.session_state.last_names = _parse_decorators(code)
     st.session_state.should_scroll = True
     st.rerun()
 
@@ -318,8 +313,8 @@ st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 _last = st.session_state.get('last_names', [])
 if _last:
     st.subheader('因子函数代码')
-    for _name in _last:
-        _found = _get_factor_code(_name)
+    for _name, _kind in _last:
+        _found = _get_func_code(_name, _kind)
         if _found:
             st.code(_found, language='python')
 
@@ -331,7 +326,9 @@ if names:
 
     # 指标行（从 CSV，如果有）
     na = pd.isna
-    for name in names:
+    for name, _kind in names:
+        if _kind == 'feature':
+            continue
         meta = get_factors().get(name)
         if not meta:
             continue
@@ -372,7 +369,9 @@ if names:
                     _small_metric(cols[i], label, val)
 
     # 图表（从 parquet，不受 CSV 影响）
-    for name in names:
+    for name, kind in names:
+        if kind == 'feature':
+            continue
         meta = get_factors().get(name)
         if not meta:
             continue
@@ -380,10 +379,10 @@ if names:
 
         if not data_exists(BASE, name, cat):
             st.info(f'{name} 分析数据缺失')
-            factor_code = _get_factor_code(name)
-            if factor_code and st.button('补全数据', key=f'rebuild_{name}'):
+            func_code = _get_func_code(name, kind)
+            if func_code and st.button('补全数据', key=f'rebuild_{name}'):
                 with st.spinner('计算中...'):
-                    stdout, stderr = _run_scratch(factor_code, force=True)
+                    stdout, stderr = _run_scratch(func_code, force=True)
                     st.session_state.log = stdout
                     if stderr:
                         st.session_state.log += '\n--- 错误 ---\n' + stderr
@@ -417,7 +416,8 @@ if names:
 
     # 牛熊对比（从 CSV）
     if df is not None and os.path.exists(csv_path):
-        factor_df = df[df['factor'].isin(names)]
+        _names_only = [n for n, _ in names]
+        factor_df = df[df['factor'].isin(_names_only)]
         if not factor_df.empty:
             st.subheader('牛熊对比')
             ic_cols = sorted([c for c in factor_df.columns if c.startswith('ic_T')],
