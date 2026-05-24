@@ -9,13 +9,41 @@
    - domain: 计算域（industry行业日频 / stock个股日频 / monthly月度）
    - code: 完整的 @factor 装饰器 + 函数定义
    - logic_summary: 因子逻辑简述
-2. data_requirements: 每个因子依赖的基础数据字段列表，用自然语言描述清楚（如"申万行业指数的收盘价"）。不要编造表名和字段名，描述意思即可。
+   - aliases: 代码中用到的表名和字段名的别名映射（见下方说明）
+
+## 别名映射（aliases）
+代码中表示内容含义的字段（如 close_price、amount）使用别名，标注描述。
+**但以下通用字段直接使用真实名称，不需要别名：**
+
+| domain | key 列 | 日期列 |
+|--------|--------|--------|
+| industry | `industry_code` | `TRADE_DATE` |
+| stock | `STOCK_CODE` | `TRADE_DATE` |
+| monthly | `industry_code` | `ym` |
+
+aliases 列出每个别名的描述信息，格式如下：
+
+```json
+{
+  "idx_daily": {
+    "type": "table",
+    "description": "申万行业指数日线行情"
+  },
+  "idx_daily.close_price": {
+    "type": "field",
+    "description": "行业指数收盘价"
+  }
+}
+```
+
+系统会根据 description 自动匹配到真实的数据表字段。
 
 ## 因子代码规范
 - 使用 @factor 装饰器，参数：name/category/label/domain
 - 函数通过 api 参数取数据，使用 api.table() 或 api.query()
 - 返回带 key 列 + 因子列的 DataFrame
 - 代码自包含，只依赖 api 参数
+- 表名和字段名使用人类可读的别名，如 idx_daily、close_price、trade_date 等
 
 ## 分类说明
 - category: pv(价量) / fund(资金) / ind(行业) / monthly(月度)
