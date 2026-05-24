@@ -3,22 +3,16 @@
 返回带 key 列（industry_code, trade_date）+ 因子列的 DataFrame。
 """
 
-import pandas as pd
-import numpy as np
 from math import ceil
-from factor_workbench.registry import factor, feature
-
 
 def _mapping(api):
     """取行业映射（stock_code → industry_code）。"""
     return api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code'])
 
-
 def _swi_idx(api):
     """取行业指数日线。"""
     return api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
         columns={'close': 'idx_close'})
-
 
 # ─── 8 个简单均值因子 ───
 
@@ -27,48 +21,40 @@ def up_ratio(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'up_stock'])
     return fac.groupby(['industry_code', 'trade_date'])['up_stock'].mean().reset_index(name='up_ratio')
 
-
 @factor(name='strong_ratio', category='pv', label='强势股涨幅占比', domain='industry')
 def strong_ratio(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'strong_stock'])
     return fac.groupby(['industry_code', 'trade_date'])['strong_stock'].mean().reset_index(name='strong_ratio')
-
 
 @factor(name='vol_ratio', category='pv', label='强势成交量占比', domain='industry')
 def vol_ratio(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'strong_volume'])
     return fac.groupby(['industry_code', 'trade_date'])['strong_volume'].mean().reset_index(name='vol_ratio')
 
-
 @factor(name='ma8_pos_avg', category='pv', label='8日均线多头占比', domain='industry')
 def ma8_pos_avg(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'ma8_pos'])
     return fac.groupby(['industry_code', 'trade_date'])['ma8_pos'].mean().reset_index(name='ma8_pos_avg')
-
 
 @factor(name='tech_sync_rt', category='pv', label='技术指标同步率', domain='industry')
 def tech_sync_rt(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'tech_sync'])
     return fac.groupby(['industry_code', 'trade_date'])['tech_sync'].mean().reset_index(name='tech_sync_rt')
 
-
 @factor(name='break_cons_rt', category='pv', label='突破整理形态占比', domain='industry')
 def break_cons_rt(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'break_cons'])
     return fac.groupby(['industry_code', 'trade_date'])['break_cons'].mean().reset_index(name='break_cons_rt')
-
 
 @factor(name='ma_bull', category='pv', label='多头均线占比', domain='industry')
 def ma_bull(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'ma_bull'])
     return fac.groupby(['industry_code', 'trade_date'])['ma_bull'].mean().reset_index()
 
-
 @factor(name='ma_bear', category='pv', label='空头均线占比', domain='industry')
 def ma_bear(api):
     fac = api.table('stock_features', columns=['stock_code', 'trade_date', 'industry_code', 'ma_bear'])
     return fac.groupby(['industry_code', 'trade_date'])['ma_bear'].mean().reset_index()
-
 
 @factor(name='ma5_ratio', category='pv', label='MA5上方占比', domain='industry')
 def ma5_ratio(api):
@@ -79,7 +65,6 @@ def ma5_ratio(api):
     ma5 = stock.groupby('stock_code')['close'].transform(lambda x: x.rolling(5).mean())
     stock['above_ma5'] = (stock['close'] > ma5).astype(int)
     return stock.groupby(['industry_code', 'trade_date'])['above_ma5'].mean().reset_index(name='ma5_ratio')
-
 
 # ─── 10 个复杂因子（读原始数据） ───
 
@@ -95,7 +80,6 @@ def strong_fund_ratio(api):
 
     return stock.groupby(['industry_code', 'trade_date'], group_keys=False).apply(
         _fund_ratio, include_groups=False).reset_index(name='strong_fund_ratio')
-
 
 @factor(name='turn_pctl', category='ind', label='换手率分位数', domain='industry')
 def turn_pctl(api):
@@ -115,7 +99,6 @@ def turn_pctl(api):
         lambda x: x.rolling(250, min_periods=20).apply(_pctl_250))
     return ind_turn[['industry_code', 'trade_date', 'turn_pctl']]
 
-
 @factor(name='diverge_5d', category='fund', label='主力资金背离度', domain='industry')
 def diverge_5d(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'inflow_rate', 'mv'])
@@ -132,7 +115,6 @@ def diverge_5d(api):
                                 on=['industry_code', 'trade_date'], how='left')
     diverge['diverge_5d'] = diverge['inflow_5d'] - diverge['ret_5d']
     return diverge[['industry_code', 'trade_date', 'diverge_5d']]
-
 
 @factor(name='ret_divg', category='ind', label='涨幅分化度', domain='industry')
 def ret_divg(api):
@@ -152,7 +134,6 @@ def ret_divg(api):
     ret['ret_divg'] = ret['top3_ret'] - ret['idx_ret']
     return ret[['industry_code', 'trade_date', 'ret_divg']]
 
-
 @factor(name='amt_divg', category='fund', label='成交占比乖离率', domain='industry')
 def amt_divg(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'amount'])
@@ -167,7 +148,6 @@ def amt_divg(api):
     amt['amt_divg'] = amt['amt_ratio'] / amt['amt_ma20'] - 1
     return amt[['industry_code', 'trade_date', 'amt_divg']]
 
-
 @factor(name='margin_dir', category='fund', label='融资盘方向', domain='industry')
 def margin_dir(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'borrow_buy', 'borrow_repay'])
@@ -180,7 +160,6 @@ def margin_dir(api):
     ind['margin_dir'] = ind.groupby('industry_code')['chg_rt'].transform(lambda x: x.rolling(3).mean())
     return ind[['industry_code', 'trade_date', 'margin_dir']]
 
-
 @factor(name='margin_sum5', category='fund', label='融资净买入5日滚动', domain='industry')
 def margin_sum5(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'borrow_buy', 'borrow_repay'])
@@ -191,7 +170,6 @@ def margin_sum5(api):
     ind = ind.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
     ind['margin_sum5'] = ind.groupby('industry_code')['net_margin'].transform(lambda x: x.rolling(5).sum())
     return ind[['industry_code', 'trade_date', 'margin_sum5']]
-
 
 @factor(name='pb_disp', category='ind', label='估值离散度', domain='industry')
 def pb_disp(api):
@@ -208,7 +186,6 @@ def pb_disp(api):
     ind_pb['pb_disp'] = ind_pb.groupby('industry_code')['pb_pctl'].transform(lambda x: x.rolling(20).std())
     return ind_pb[['industry_code', 'trade_date', 'pb_disp']]
 
-
 @factor(name='etf_inflow_st', category='fund', label='行业ETF净流入5日平滑', domain='industry')
 def etf_inflow_st(api):
     df = api.table('etf_daily')
@@ -219,14 +196,13 @@ def etf_inflow_st(api):
     ind['etf_inflow_st'] = ind.groupby('industry_code')['inflow_amt'].transform(lambda x: x.rolling(5).mean())
     return ind[['industry_code', 'trade_date', 'etf_inflow_st']]
 
-
 @factor(name='mom_12m', category='ind', label='动量因子', domain='industry')
 def mom_12m(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (LAG(close, 21) OVER w / LAG(close, 252) OVER w - 1) as mom_12m
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
 # ─── 新增草稿因子 ───
@@ -234,12 +210,11 @@ def mom_12m(api):
 @factor(name='pct_5d', category='pv', label='5日涨幅', domain='industry')
 def pct_5d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / LAG(close, 5) OVER w - 1) as pct_5d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
-
 
 # ─── 新增草稿因子 ───
 @factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
@@ -254,41 +229,39 @@ def ret_5d(api):
 @factor(name='ma_5d', category='pv', label='5日涨幅', domain='industry')
 def ma_5d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / LAG(close, 5) OVER w - 1) as ma_5d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
 @factor(name='ma_10d', category='pv', label='10日涨幅', domain='industry')
 def ma_10d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / LAG(close, 10) OVER w - 1) as ma_10d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
-
 
 # ─── 新增草稿因子 ───
 @factor(name='ma_5d', category='pv', label='5日涨幅', domain='industry')
 def ma_5d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / LAG(close, 5) OVER w - 1) as ma_5d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
 
 @factor(name='ma_10d', category='pv', label='10日涨幅', domain='industry')
 def ma_10d(api):
     return api.query("""
-        SELECT stock_code as industry_code, trade_date,
+        SELECT industry_code, trade_date,
                (close / LAG(close, 10) OVER w - 1) as ma_10d
         FROM industry_price
-        WINDOW w AS (PARTITION BY stock_code ORDER BY trade_date)
+        WINDOW w AS (PARTITION BY industry_code ORDER BY trade_date)
     """)
-
 
 # ─── 新增草稿因子 ───
 @factor(name='bull_bear_spread', category='ind', label='多空均线差', domain='industry')
@@ -306,7 +279,6 @@ def roe_improve(api):
     df['roe_improve'] = df.groupby('industry_code')['roe_pctl'].diff(1)
     return df[['industry_code', 'ym', 'roe_improve']]
 
-
 # ─── 新增草稿因子 ───
 @factor(name='bull_bear_spread', category='ind', label='多空均线差', domain='industry')
 def bull_bear_spread(api):
@@ -322,7 +294,6 @@ def roe_improve(api):
     df = df.sort_values(['industry_code', 'ym'])
     df['roe_improve'] = df.groupby('industry_code')['roe_pctl'].diff(1)
     return df[['industry_code', 'ym', 'roe_improve']]
-
 
 # ─── 新增草稿因子 ───
 @factor(name='test_idx_hl', category='ind', label='测试高低差', domain='industry')
@@ -332,9 +303,6 @@ def test_idx_hl(api):
                (close - open) / (open + 1e-10) as test_idx_hl
         FROM industry_price
     """)
-
-
-
 
 # ─── 新增因子 ───
 @factor(name='test_ma8_avg', category='pv', label='测试20日线上占比', domain='industry')

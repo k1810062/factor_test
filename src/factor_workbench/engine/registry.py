@@ -63,7 +63,7 @@ def feature(name, domain='stock'):
 
 
 SAMPLE_FACTOR = '''"""示例因子。可删除或修改。"""
-from factor_workbench.registry import factor
+from factor_workbench.engine.registry import factor
 
 
 @factor(name='ret_5d', category='pv', label='5日涨幅', domain='industry')
@@ -90,17 +90,17 @@ def load_factor_modules(factor_dirs=None):
             with open(os.path.join(factor_dir, 'sample_factor.py'), 'w') as f:
                 f.write(SAMPLE_FACTOR)
             print(f'  [registry] 已创建示例因子 {factor_dir}/sample_factor.py')
-        import importlib.util
+        import pandas as pd, numpy as np
         for f in sorted(os.listdir(factor_dir)):
             if not f.endswith('.py') or f.startswith('_'):
                 continue
             path = os.path.join(factor_dir, f)
-            name = f[:-3]
             try:
-                spec = importlib.util.spec_from_file_location(name, path)
-                if spec and spec.loader:
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
+                exec(compile(open(path).read(), path, 'exec'), {
+                    'factor': factor, 'feature': feature,
+                    'pd': pd, 'np': np,
+                    '__builtins__': __builtins__,
+                })
             except Exception as e:
                 print(f'  [registry] 加载 {f} 失败: {e}')
 

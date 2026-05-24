@@ -3,11 +3,6 @@
 返回带 key 列（industry_code, ym）+ 因子列的 DataFrame。
 """
 
-import pandas as pd
-import numpy as np
-from factor_workbench.registry import factor
-
-
 @factor(name='upg_cnt_rt', category='monthly', label='上调数量占比', domain='industry_monthly')
 def upg_cnt_rt(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'industry_code', 'rating_grade'])
@@ -21,7 +16,6 @@ def upg_cnt_rt(api):
 
     return stock.groupby(['industry_code', 'ym']).apply(agg, include_groups=False).reset_index(name='upg_cnt_rt')
 
-
 @factor(name='upg_mv_rt', category='monthly', label='上调市值占比', domain='industry_monthly')
 def upg_mv_rt(api):
     stock = api.table('stock_daily', columns=['stock_code', 'trade_date', 'industry_code', 'rating_grade', 'val_mv'])
@@ -34,7 +28,6 @@ def upg_mv_rt(api):
         return up_mv / total_mv if total_mv > 0 else 0
 
     return stock.groupby(['industry_code', 'ym']).apply(agg, include_groups=False).reset_index(name='upg_mv_rt')
-
 
 @factor(name='roe_pctl', category='monthly', label='盈利景气度', domain='industry_monthly')
 def roe_pctl(api):
@@ -51,7 +44,6 @@ def roe_pctl(api):
             lambda s: (s <= s.iloc[-1]).sum() / len(s)))
     return roe[['industry_code', 'ym', 'roe_pctl']]
 
-
 @factor(name='mom_12m_m', category='monthly', label='月度动量因子', domain='industry_monthly')
 def mom_12m_m(api):
     swidx = api.table('industry_price', columns=['industry_code', 'trade_date', 'close']).rename(
@@ -63,7 +55,6 @@ def mom_12m_m(api):
     monthly['mom_12m_m'] = monthly.groupby('industry_code')['idx_close'].transform(
         lambda x: x.shift(1) / x.shift(12) - 1)
     return monthly[['industry_code', 'ym', 'mom_12m_m']]
-
 
 # ─── 新增草稿因子 ───
 @factor(name='roe_improve', category='monthly', label='盈利景气改善', domain='industry_monthly')

@@ -2,8 +2,8 @@
 
 用法：python3 -m factor_workbench.run
 """
-from .auto_config import generate_config
-from .pipeline import Pipeline
+from .analysis.auto_config import generate_config
+from .engine.pipeline import Pipeline
 
 
 def main():
@@ -13,3 +13,7 @@ def main():
         p.run()
     finally:
         p.close()
+
+
+if __name__ == '__main__':
+    main()

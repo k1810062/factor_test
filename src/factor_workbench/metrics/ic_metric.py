@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import os
 from scipy.stats import spearmanr
-from .registry import metric
+from ..engine.registry import metric
 
 
 def _nw_std(x, max_lag):
