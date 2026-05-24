@@ -63,14 +63,20 @@ def feature(name, domain='stock'):
 
 
 def load_factor_modules(factor_dirs=None):
-    """扫描目录下的所有 .py 文件并导入，触发 @factor/@metric 注册。"""
+    """扫描目录下的所有 .py 文件并导入，触发 @factor/@metric 注册。
+
+    目录路径以项目根（factor_system/）为基准，不受 CWD 影响。
+    """
+    # 项目根 = src/factor_workbench/engine/ → src/ → ../
+    _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     if factor_dirs is None:
         factor_dirs = ['factors']
     elif isinstance(factor_dirs, str):
         factor_dirs = [factor_dirs]
     for factor_dir in factor_dirs:
+        factor_dir = os.path.join(_root, factor_dir)
         if not os.path.isdir(factor_dir):
-            continue
+            os.makedirs(factor_dir)
         import pandas as pd, numpy as np
         for f in sorted(os.listdir(factor_dir)):
             if not f.endswith('.py') or f.startswith('_'):

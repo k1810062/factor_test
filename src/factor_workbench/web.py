@@ -9,7 +9,7 @@ import sys, os, json, re, subprocess, tempfile, glob, numpy as np
 from code_editor import code_editor
 
 from factor_workbench.analysis.chart_renderer import (
-    load_ic_data, load_ret_data, data_exists,
+    load_ic_data, load_ret_data,
     render_ic_cumulative, render_long_short,
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
@@ -368,7 +368,7 @@ if names:
                 for i, (label, val) in enumerate(all_items):
                     _small_metric(cols[i], label, val)
 
-    # 图表（从 parquet，不受 CSV 影响）
+    # 图表
     for name, kind in names:
         if kind == 'feature':
             continue
@@ -376,43 +376,54 @@ if names:
         if not meta:
             continue
         cat = meta.category
+        func_code = _get_func_code(name, kind)
+        _rebuild = [df is None or df[df['factor'] == name].empty]
 
-        if not data_exists(BASE, name, cat):
-            st.info(f'{name} 分析数据缺失')
-            func_code = _get_func_code(name, kind)
-            if func_code and st.button('补全数据', key=f'rebuild_{name}'):
+        def _try_chart(load_fn, render_fn, key, *args, **kwargs):
+            try:
+                data = load_fn(BASE, name, cat) if load_fn else None
+                if data is not None:
+                    st.plotly_chart(render_fn(data, name, *args, **kwargs),
+                                    width='stretch', key=key)
+                else:
+                    _rebuild[0] = True
+            except Exception:
+                _rebuild[0] = True
+
+        c1, c2 = st.columns(2)
+        with c1:
+            _try_chart(load_ic_data, render_ic_cumulative, f'ic_{name}')
+        with c2:
+            _try_chart(load_ret_data, render_long_short, f'ret_{name}')
+
+        c1, c2 = st.columns(2)
+        with c1:
+            _try_chart(load_ret_data, render_decile_bar, f'bar_{name}')
+        with c2:
+            _try_chart(load_ret_data, render_win_rate, f'win_{name}')
+
+        try:
+            ic_data = load_ic_data(BASE, name, cat)
+            if ic_data is not None:
+                hist_charts = render_ic_distribution(ic_data)
+                cols = st.columns(len(hist_charts))
+                for (h, fig), col in zip(hist_charts, cols):
+                    with col:
+                        st.plotly_chart(fig, width='stretch', key=f'hist_{name}_{h}')
+            else:
+                _rebuild[0] = True
+        except Exception:
+            _rebuild[0] = True
+
+        if _rebuild[0] and func_code:
+            st.info(f'{name} 部分分析数据缺失')
+            if st.button('补全数据', key=f'rebuild_{name}'):
                 with st.spinner('计算中...'):
                     stdout, stderr = _run_scratch(func_code, force=True)
                     st.session_state.log = stdout
                     if stderr:
                         st.session_state.log += '\n--- 错误 ---\n' + stderr
                     st.rerun()
-            continue
-
-        ic_df = load_ic_data(BASE, name, cat)
-        ret_df = load_ret_data(BASE, name, cat)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(render_ic_cumulative(ic_df, name),
-                            width='stretch', key=f'ic_{name}')
-        with c2:
-            st.plotly_chart(render_long_short(ret_df, name),
-                            width='stretch', key=f'ret_{name}')
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(render_decile_bar(ret_df, name),
-                            width='stretch', key=f'bar_{name}')
-        with c2:
-            st.plotly_chart(render_win_rate(ret_df, name),
-                            width='stretch', key=f'win_{name}')
-
-        hist_charts = render_ic_distribution(ic_df)
-        cols = st.columns(len(hist_charts))
-        for (h, fig), col in zip(hist_charts, cols):
-            with col:
-                st.plotly_chart(fig, width='stretch', key=f'hist_{name}_{h}')
 
     # 牛熊对比（从 CSV）
     if df is not None and os.path.exists(csv_path):
