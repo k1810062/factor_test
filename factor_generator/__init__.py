@@ -1,3 +1,3 @@
-from factor_generator.generator import generate, FactorOutput, FactorInfo, RequirementInfo
+from factor_generator.generator import generate, reapply, FactorOutput, FactorInfo, RequirementInfo
 
-__all__ = ['generate', 'FactorOutput', 'FactorInfo', 'RequirementInfo']
+__all__ = ['generate', 'reapply', 'FactorOutput', 'FactorInfo', 'RequirementInfo']

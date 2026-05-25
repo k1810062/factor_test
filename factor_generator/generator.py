@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from factor_generator.llm_client import LLMClient, LLMError
-from factor_generator.matcher import FieldMatcher
+# LLM 直接输出真实表名和字段名，不再需要 embedding 匹配
 
 _DEFAULT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'config')
 
@@ -19,8 +19,9 @@ _DEFAULT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'config')
 @dataclass
 class RequirementInfo:
     """数据需求标注结果。"""
-    description: str
-    status: str                  # available / missing / need_derive
+    description: str            # 字段的自然语言描述（如"行业指数收盘价"）
+    table_desc: str = ''        # 表描述（如"行业指数日线行情"）
+    status: str = 'missing'      # available / missing / need_derive
     alias_table: str | None = None
     alias_field: str | None = None
     matched_table: str | None = None
@@ -45,6 +46,7 @@ class FactorOutput:
     """生成结果。"""
     factors: list[FactorInfo]
     raw_llm_output: dict | None = None
+    usage: dict | None = None
     error: str | None = None
 
 
@@ -146,12 +148,23 @@ def generate(
     except json.JSONDecodeError as e:
         return FactorOutput(factors=[], error=f'配置文件格式错误: {e}')
 
-    # 2. 调用 LLM
+    # 2. 构建带数据字典的 system prompt
+    data_dict_lines = ['# 可用数据表\n']
+    for t in data_dict.get('tables', []):
+        tname = t['name']
+        tdesc = t.get('description', '')
+        data_dict_lines.append(f'\n## {tname}（{tdesc}）')
+        for f in t.get('fields', []):
+            data_dict_lines.append(f'  {tname}.{f["name"]} — {f.get("description", "")}')
+    data_dict_str = '\n'.join(data_dict_lines)
+
+    system_prompt = prompt_template.replace(
+        '{data_dict}', data_dict_str).replace(
+        '{report_text}', report_text)
+
     try:
         client = LLMClient(api_config)
-        system_prompt = prompt_template.replace(
-            '{report_text}', report_text)
-        raw = client.call_json(system_prompt, '')
+        raw, llm_usage = client.call_json(system_prompt, '')
     except (LLMError, json.JSONDecodeError, KeyError) as e:
         tb = traceback.format_exc()
         return FactorOutput(
@@ -161,7 +174,7 @@ def generate(
 
     # 3. 解析 LLM 输出
     try:
-        factor_output = _parse_llm_output(raw)
+        factor_output = _parse_llm_output(raw, data_dict)
     except (KeyError, TypeError, ValueError) as e:
         return FactorOutput(
             factors=[],
@@ -169,104 +182,105 @@ def generate(
             error=f'LLM 输出解析失败: {e}',
         )
 
-    # 4. 匹配数据字典
-    matcher = FieldMatcher(data_dict)
-    match_ok = matcher.build_index()
-
     for fi in factor_output:
         if fi.data_requirements:
-            req_dicts = [
-                {'description': r.description}
-                for r in fi.data_requirements
-            ]
-            if match_ok:
-                matched = matcher.match(req_dicts)
-            else:
-                matched = [
-                    {'description': r.description, 'status': 'missing',
-                     'matched_table': None, 'matched_field': None,
-                     'confidence': None}
-                    for r in fi.data_requirements
-                ]
-
-            # 收集 alias → real 映射
-            table_map: dict[str, str] = {}
-            field_map: dict[str, str] = {}
             new_reqs: list[RequirementInfo] = []
-
-            for req, m in zip(fi.data_requirements, matched):
-                new_reqs.append(RequirementInfo(
-                    description=m.get('description', ''),
-                    status=m['status'],
-                    alias_table=req.alias_table,
-                    alias_field=req.alias_field,
-                    matched_table=m.get('matched_table'),
-                    matched_field=m.get('matched_field'),
-                    confidence=m.get('confidence'),
-                ))
-                if (m['status'] == 'available'
-                        and m.get('matched_table')
-                        and req.alias_table):
-                    table_map[req.alias_table] = m['matched_table']
-                if (m['status'] == 'available'
-                        and m.get('matched_field')
-                        and req.alias_field):
-                    field_map[req.alias_field] = m['matched_field']
+            for req in fi.data_requirements:
+                new_reqs.append(req)
 
             fi.data_requirements = new_reqs
 
-            # 5. 代码别名替换
-            if table_map or field_map:
-                fi.code = _apply_code_mapping(
-                    fi.code, table_map, field_map)
+    return FactorOutput(factors=factor_output, raw_llm_output=raw, usage=llm_usage)
+
+
+def reapply(llm_output_path: str, config_dir: str | None = None) -> FactorOutput:
+    """复用已保存的 LLM 输出，重新匹配 + 替换，不调 LLM。
+
+    用户补完数据后调用此函数，无需重新生成。
+    """
+    if config_dir is None:
+        config_dir = _DEFAULT_CONFIG_DIR
+
+    with open(llm_output_path, encoding='utf-8') as f:
+        raw = json.load(f)
+
+    try:
+        factor_output = _parse_llm_output(raw, data_dict)
+    except (KeyError, TypeError, ValueError) as e:
+        return FactorOutput(factors=[], raw_llm_output=raw, error=f'解析失败: {e}')
+
+    try:
+        data_dict = _load_json(
+            _resolve_config_path(config_dir, 'data_dictionary.json'))
+    except FileNotFoundError as e:
+        return FactorOutput(factors=factor_output, raw_llm_output=raw, error=f'数据字典不存在: {e}')
+
+    # LLM 直接输出真实表名和字段名，不再需要匹配
+    for fi in factor_output:
+        for req in fi.data_requirements:
+            req.status = 'available' if req.matched_table else 'missing'
 
     return FactorOutput(factors=factor_output, raw_llm_output=raw)
 
 
-def _parse_llm_output(raw: dict) -> list[FactorInfo]:
+def _parse_llm_output(raw: dict, data_dict=None) -> list[FactorInfo]:
     """解析 LLM 返回的 JSON 为 FactorInfo 列表。"""
+    # 构建可查字段集合
+    valid_fields: dict[str, set[str]] = {}
+    if data_dict:
+        for t in data_dict.get('tables', []):
+            valid_fields[t['name']] = {f['name'] for f in t.get('fields', [])}
+
     factors_raw = raw.get('factors', [])
     if not factors_raw:
         raise ValueError('LLM 输出缺少 factors 字段')
 
     result: list[FactorInfo] = []
     for f in factors_raw:
-        # 解析 aliases 映射
         aliases_raw = f.get('aliases', {})
-
-        # 从 aliases 和 data_requirements 合并生成需求列表
         reqs_raw = f.get('data_requirements', [])
         reqs: list[RequirementInfo] = []
 
         for r in reqs_raw:
-            desc = r.get('description', '')
-            alias_table = r.get('alias_table') or r.get('table')
-            alias_field = r.get('alias_field') or r.get('field')
+            # 新格式：LLM 直接输出 table + field（真实名）
+            table = r.get('table') or r.get('table_desc', '')
+            field = r.get('field') or r.get('field_desc', '') or r.get('description', '')
+            alias_table = r.get('alias_table') or table
+            alias_field = r.get('alias_field') or field
 
-            # 如果没有单独指定 alias，尝试从 aliases 反查
             if not alias_table:
                 for key, val in aliases_raw.items():
-                    if val.get('type') == 'table' and val.get('description') == desc:
+                    if val.get('type') == 'table' and val.get('description') == table:
                         alias_table = key
                         break
 
+            # 校验字段是否真实存在
+            _field_ok = False
+            if table and field and valid_fields:
+                _tbl_fields = valid_fields.get(table)
+                if _tbl_fields and field in _tbl_fields:
+                    _field_ok = True
             reqs.append(RequirementInfo(
-                description=desc,
-                status='missing',
+                description=field,
+                table_desc=table,
+                status='available' if _field_ok else 'missing',
                 alias_table=alias_table,
                 alias_field=alias_field,
+                matched_table=table if table and '.' not in table else None,
+                matched_field=field,
             ))
 
-        # 如果 LLM 没有输出 data_requirements，
-        # 从 aliases 自动生成（field 级别）
+        # 兼容旧格式：从 aliases 生成（field 级别）
         if not reqs and aliases_raw:
             for key, val in aliases_raw.items():
                 if val.get('type') == 'field':
                     parts = key.split('.', 1)
                     alias_t = parts[0] if len(parts) > 1 else None
                     alias_f = parts[1] if len(parts) > 1 else parts[0]
+                    table_desc = aliases_raw.get(alias_t, {}).get('description', '') if alias_t else ''
                     reqs.append(RequirementInfo(
                         description=val.get('description', ''),
+                        table_desc=table_desc,
                         status='missing',
                         alias_table=alias_t,
                         alias_field=alias_f,

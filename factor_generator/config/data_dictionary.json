@@ -2,6 +2,7 @@
   "tables": [
     {
       "name": "etf_daily",
+      "description": "ETF行情",
       "fields": [
         {
           "name": "etf_code",
@@ -11,237 +12,246 @@
         {
           "name": "trade_date",
           "type": "VARCHAR",
-          "description": "ETF的交易日"
+          "description": "交易日"
         },
         {
           "name": "industry",
           "type": "VARCHAR",
-          "description": "ETF的行业名称"
+          "description": "行业名称"
         },
         {
           "name": "industry_code",
           "type": "VARCHAR",
-          "description": "ETF的行业代码"
+          "description": "行业代码"
         },
         {
           "name": "净流入金额（万元）",
           "type": "DOUBLE",
-          "description": "ETF的净流入金额（万元）"
+          "description": "净流入金额（万元）"
         }
       ]
     },
     {
       "name": "industry_daily",
+      "description": "行业指数行情",
       "fields": [
         {
           "name": "industry_code",
           "type": "VARCHAR",
-          "description": "行业指数的行业代码"
+          "description": "行业代码"
         },
         {
           "name": "trade_date",
           "type": "VARCHAR",
-          "description": "行业指数的交易日"
+          "description": "交易日"
         },
         {
           "name": "close",
           "type": "DOUBLE",
-          "description": "行业指数的收盘价"
+          "description": "收盘价"
         },
         {
           "name": "open",
           "type": "DOUBLE",
-          "description": "行业指数的开盘价"
+          "description": "开盘价"
         },
         {
           "name": "industry",
           "type": "VARCHAR",
-          "description": "行业指数的行业名称"
+          "description": "行业名称"
         }
       ]
     },
     {
       "name": "stock_daily",
+      "description": "个股行情",
       "fields": [
         {
           "name": "stock_code",
           "type": "VARCHAR",
-          "description": "个股的股票代码"
+          "description": "股票代码"
         },
         {
           "name": "trade_date",
           "type": "VARCHAR",
-          "description": "个股的交易日"
+          "description": "交易日"
         },
         {
           "name": "industry",
           "type": "VARCHAR",
-          "description": "个股的行业名称"
+          "description": "行业名称"
         },
         {
           "name": "industry_code",
           "type": "VARCHAR",
-          "description": "个股的行业代码"
+          "description": "行业代码"
         },
         {
           "name": "close",
           "type": "DOUBLE",
-          "description": "个股的收盘价"
+          "description": "收盘价"
         },
         {
           "name": "vol",
           "type": "DOUBLE",
-          "description": "个股的成交量（股）"
+          "description": "成交量（股）"
         },
         {
           "name": "amount",
           "type": "DOUBLE",
-          "description": "个股的成交金额（元）"
+          "description": "成交金额（元）"
         },
         {
           "name": "turn",
           "type": "DOUBLE",
-          "description": "个股的换手率"
+          "description": "换手率"
         },
         {
           "name": "mv",
           "type": "DOUBLE",
-          "description": "个股的总市值"
+          "description": "总市值"
         },
         {
           "name": "n",
           "type": "DOUBLE",
-          "description": "个股的上市天数"
+          "description": "上市天数"
         },
         {
           "name": "pe_ttm",
           "type": "DOUBLE",
-          "description": "个股的滚动市盈率"
+          "description": "滚动市盈率"
         },
         {
           "name": "pb",
           "type": "DOUBLE",
-          "description": "个股的市净率"
+          "description": "市净率"
         },
         {
           "name": "inflow_rate",
           "type": "DOUBLE",
-          "description": "个股的资金流入率"
+          "description": "资金流入率"
         },
         {
           "name": "borrow_buy",
           "type": "DOUBLE",
-          "description": "个股的融资买入额"
+          "description": "融资买入额"
         },
         {
           "name": "borrow_repay",
           "type": "DOUBLE",
-          "description": "个股的融资偿还额"
+          "description": "融资偿还额"
         },
         {
           "name": "roe_ttm",
           "type": "DOUBLE",
-          "description": "个股的净资产收益率"
+          "description": "净资产收益率"
         },
         {
           "name": "val_mv",
           "type": "DOUBLE",
-          "description": "个股的流通市值"
+          "description": "流通市值"
         },
         {
           "name": "net_asset_value",
           "type": "DOUBLE",
-          "description": "个股的净资产"
+          "description": "净资产"
         },
         {
           "name": "rating_grade",
           "type": "DOUBLE",
-          "description": "个股的分析师评级"
+          "description": "分析师评级"
         }
       ]
     },
     {
       "name": "stock_industry",
+      "description": "个股行情",
       "fields": [
         {
           "name": "stock_code",
           "type": "VARCHAR",
-          "description": "个股行业归属的股票代码"
+          "description": "股票代码"
         },
         {
           "name": "trade_date",
           "type": "VARCHAR",
-          "description": "个股行业归属的交易日"
+          "description": "交易日"
         },
         {
           "name": "industry",
           "type": "VARCHAR",
-          "description": "个股行业归属的行业名称"
+          "description": "行业名称"
         },
         {
           "name": "industry_code",
           "type": "VARCHAR",
-          "description": "个股行业归属的行业代码"
+          "description": "行业代码"
         }
       ]
     },
     {
       "name": "stock_features",
+      "description": "个股的数据",
       "fields": [
         {
           "name": "stock_code",
           "type": "VARCHAR",
-          "description": "个股特征的股票代码"
+          "description": "股票代码"
         },
         {
           "name": "trade_date",
           "type": "VARCHAR",
-          "description": "个股特征的交易日"
+          "description": "交易日"
         },
         {
           "name": "test_ma8_pos",
           "type": "BIGINT",
-          "description": "个股特征的test_ma8_pos"
+          "description": "test_ma8_pos"
         },
         {
           "name": "break_cons",
           "type": "DOUBLE",
-          "description": "个股特征的突破"
+          "description": "突破"
         },
         {
           "name": "strong_volume",
           "type": "DOUBLE",
-          "description": "个股特征的强势"
+          "description": "强势"
         },
         {
           "name": "ma_bear",
           "type": "DOUBLE",
-          "description": "个股特征的空头"
+          "description": "空头"
         },
         {
           "name": "ma_bull",
           "type": "DOUBLE",
-          "description": "个股特征的多头"
+          "description": "多头"
         },
         {
           "name": "strong_stock",
           "type": "DOUBLE",
-          "description": "个股特征的强势"
+          "description": "强势"
         },
         {
           "name": "tech_sync",
           "type": "DOUBLE",
-          "description": "个股特征的技术 同步"
+          "description": "技术 同步"
         },
         {
           "name": "ma8_pos",
           "type": "DOUBLE",
-          "description": "个股特征的ma8_pos"
+          "description": "ma8_pos"
         },
         {
           "name": "up_stock",
           "type": "DOUBLE",
-          "description": "个股特征的up_stock"
+          "description": "up_stock"
+        },
+        {
+          "name": "ma5_price",
+          "type": "DOUBLE",
+          "description": "ma5_price"
         }
       ]
     }

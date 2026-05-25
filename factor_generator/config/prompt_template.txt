@@ -1,55 +1,51 @@
-你是一个量化因子分析师。根据用户提供的研报或想法，完成以下任务：
+{data_dict}
 
-## 输出格式
-用 JSON 格式返回，包含：
-1. factors: 因子列表，每项包含：
-   - name: 因子英文名，蛇形命名
-   - label: 中文名
-   - category: 分类（pv价量 / fund资金 / ind行业 / monthly月度）
-   - domain: 计算域（industry行业日频 / stock个股日频 / monthly月度）
-   - code: 完整的 @factor 装饰器 + 函数定义
-   - logic_summary: 因子逻辑简述
-   - aliases: 代码中用到的表名和字段名的别名映射（见下方说明）
-
-## 别名映射（aliases）
-代码中表示内容含义的字段（如 close_price、amount）使用别名，标注描述。
-**但以下通用字段直接使用真实名称，不需要别名：**
-
-| domain | key 列 | 日期列 |
-|--------|--------|--------|
-| industry | `industry_code` | `TRADE_DATE` |
-| stock | `STOCK_CODE` | `TRADE_DATE` |
-| monthly | `industry_code` | `ym` |
-
-aliases 列出每个别名的描述信息，格式如下：
+## 任务
+根据用户提供的研报或想法，提取所有因子。输出 JSON 格式：
 
 ```json
 {
-  "idx_daily": {
-    "type": "table",
-    "description": "申万行业指数日线行情"
-  },
-  "idx_daily.close_price": {
-    "type": "field",
-    "description": "行业指数收盘价"
-  }
+  "factors": [
+    {
+      "name": "因子英文名",
+      "label": "中文名",
+      "category": "pv / fund / ind / monthly",
+      "domain": "industry / stock / industry_monthly / stock_monthly",
+      "code": "@factor 装饰的完整代码",
+      "logic_summary": "因子逻辑简述",
+      "data_requirements": [
+        {"table": "真实表名", "field": "真实字段名"}
+      ]
+    }
+  ]
 }
 ```
 
-系统会根据 description 自动匹配到真实的数据表字段。
+## 规则
 
-## 因子代码规范
-- 使用 @factor 装饰器，参数：name/category/label/domain
-- 函数通过 api 参数取数据，使用 api.table()（参数名 columns，不是 fields）或 api.query()
-- 返回带 key 列 + 因子列的 DataFrame
-- 代码自包含，只依赖 api 参数
-- 表名和字段名使用人类可读的别名，如 idx_daily、close_price、trade_date 等
+### domain
+根据因子计算对象判断：
+- 个股日频 → stock
+- 行业日频 → industry
+- 行业月度 → industry_monthly
+- 个股月度 → stock_monthly
 
-## 分类说明
-- category: pv(价量) / fund(资金) / ind(行业) / monthly(月度)
-- domain: industry(行业日频，key: industry_code+TRADE_DATE) / stock(个股日频，key: STOCK_CODE+TRADE_DATE) / monthly(月度，key: industry_code+ym)
+### 命名
+- name 用蛇形命名，如 ret_5d、mom_12m，优先用研报中已有的英文名
+- 研报无英文名则按含义简洁缩写，不要太长
+- 不要重复加已有同义因子（通过 name 和 label 判断）
+
+### 代码
+- 使用 @factor(name='因子名', category='分类', label='中文名', domain='domain名') 装饰器
+- 函数定义：def 因子名(api):，参数必须为 api
+- api.table('表名', columns=['字段1', '字段2'])
+- 因子列名必须跟 name 一致
+- 通用字段用小写真实名：trade_date、stock_code、industry_code、ym
+
+### 数据字段
+- data_requirements 必须列出代码需要的所有表字段
+- table 和 field 使用上面数据字典中的真实名称
+- 数据字典中没有的字段合理推测命名并列出（会在后续步骤确认可用性）
 
 ---
-
-研报内容：
 {report_text}

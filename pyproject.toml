@@ -16,7 +16,6 @@ dependencies = [
     "plotly",
     "streamlit",
     "streamlit-code-editor",
-    "sentence-transformers",
     "httpx",
 ]
 

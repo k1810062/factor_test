@@ -12,6 +12,13 @@ import re
 
 import duckdb
 
+# 表名 → 中文描述（按命名前缀自动匹配）
+_TABLE_PREFIX = {
+    'stock_': '个股',
+    'industry_': '行业指数',
+    'etf_': 'ETF',
+}
+
 _DEFAULT_DESCRIPTIONS = {
     'stock_code': '股票代码',
     'trade_date': '交易日',
@@ -70,9 +77,20 @@ def main(config_path='config/config.json',
         with open(output_path) as f:
             existing = json.load(f)
     existing_fields = {}
+    existing_table_desc = {}
     for t in existing.get('tables', []):
         for fd in t.get('fields', []):
             existing_fields[f"{t['name']}.{fd['name']}"] = fd.get('description', '')
+        if 'description' in t:
+            existing_table_desc[t['name']] = t['description']
+
+    def _table_desc(name: str) -> str:
+        if name in existing_table_desc:
+            return existing_table_desc[name]
+        for prefix, label in _TABLE_PREFIX.items():
+            if name.startswith(prefix):
+                return f'{label}的数据' if 'feature' in name else f'{label}行情'
+        return name
 
     new_tables = []
     for name, path in tables_cfg.items():
@@ -90,18 +108,7 @@ def main(config_path='config/config.json',
             desc = existing_fields.get(key, '') or _auto_description(fname)
             fields.append({'name': fname, 'type': row['column_type'], 'description': desc})
 
-        # 表描述：用于区分同名字段在不同表中的含义
-        table_desc = {
-            'stock_daily': '个股', 'industry_daily': '行业指数',
-            'etf_daily': 'ETF', 'stock_industry': '个股行业归属',
-            'stock_features': '个股特征',
-        }.get(name, '')
-        for fd in fields:
-            # 如果有表描述且字段描述不含表名前缀，加前缀
-            if table_desc and fd['description'] and not fd['description'].startswith(table_desc):
-                fd['description'] = f'{table_desc}的{fd["description"]}'
-
-        new_tables.append({'name': name, 'fields': fields})
+        new_tables.append({'name': name, 'description': _table_desc(name), 'fields': fields})
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w', encoding='utf-8') as f:

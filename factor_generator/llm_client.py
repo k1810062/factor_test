@@ -29,7 +29,7 @@ class LLMClient:
         self.model = config['model']
         self.max_tokens = config.get('max_tokens', 4096)
         self.temperature = config.get('temperature', 0.1)
-        self.endpoint = config['endpoint'].rstrip('/')
+        self.base_url = config['base_url'].rstrip('/')
         self.api_key = _resolve_env(config['api_key'])
 
         self._headers = {
@@ -45,21 +45,21 @@ class LLMClient:
         for k, v in extra.items():
             self._headers[k] = _resolve_env(v)
 
-    def call(self, system_prompt: str, user_message: str) -> str:
-        """调用 LLM，返回文本响应。
+    def call(self, system_prompt: str, user_message: str) -> tuple[str, dict]:
+        """调用 LLM，返回 (文本, token用量)。
 
         Args:
             system_prompt: 系统提示词（prompt 模板）
             user_message: 用户消息（研报文本）
 
         Returns:
-            LLM 返回的文本内容
+            (响应文本, 用量: {prompt_tokens, completion_tokens, total_tokens})
         """
         if self.provider == 'anthropic':
             return self._call_anthropic(system_prompt, user_message)
         return self._call_openai(system_prompt, user_message)
 
-    def _call_openai(self, system_prompt: str, user_message: str) -> str:
+    def _call_openai(self, system_prompt: str, user_message: str) -> tuple[str, dict]:
         payload = {
             'model': self.model,
             'messages': [
@@ -71,7 +71,7 @@ class LLMClient:
         }
         with httpx.Client(timeout=120) as client:
             resp = client.post(
-                f'{self.endpoint}/chat/completions',
+                f'{self.base_url}/chat/completions',
                 headers=self._headers,
                 json=payload,
             )
@@ -80,9 +80,13 @@ class LLMClient:
                 f'API error {resp.status_code}: {resp.text[:500]}'
             )
         body = resp.json()
-        return body['choices'][0]['message']['content']
+        text = body['choices'][0]['message']['content']
+        usage = body.get('usage', {})
+        return text, {'prompt_tokens': usage.get('prompt_tokens', 0),
+                       'completion_tokens': usage.get('completion_tokens', 0),
+                       'total_tokens': usage.get('total_tokens', 0)}
 
-    def _call_anthropic(self, system_prompt: str, user_message: str) -> str:
+    def _call_anthropic(self, system_prompt: str, user_message: str) -> tuple[str, dict]:
         payload = {
             'model': self.model,
             'max_tokens': self.max_tokens,
@@ -94,7 +98,7 @@ class LLMClient:
         }
         with httpx.Client(timeout=120) as client:
             resp = client.post(
-                f'{self.endpoint}/messages',
+                f'{self.base_url}/messages',
                 headers=self._headers,
                 json=payload,
             )
@@ -103,15 +107,19 @@ class LLMClient:
                 f'API error {resp.status_code}: {resp.text[:500]}'
             )
         body = resp.json()
-        return body['content'][0]['text']
+        text = body['content'][0]['text']
+        usage = body.get('usage', {})
+        return text, {'prompt_tokens': usage.get('input_tokens', 0),
+                       'completion_tokens': usage.get('output_tokens', 0),
+                       'total_tokens': usage.get('input_tokens', 0) + usage.get('output_tokens', 0)}
 
-    def call_json(self, system_prompt: str, user_message: str) -> dict:
+    def call_json(self, system_prompt: str, user_message: str) -> tuple[dict, dict]:
         """调用 LLM 并解析返回的 JSON。
 
         Returns:
-            解析后的 JSON 字典
+            (解析后的 JSON 字典, token用量)
         """
-        text = self.call(system_prompt, user_message)
+        text, usage = self.call(system_prompt, user_message)
         # 尝试从代码块中提取 JSON
         match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
         if match:
@@ -122,4 +130,4 @@ class LLMClient:
         end = text.rfind('}')
         if start >= 0 and end > start:
             text = text[start:end + 1]
-        return json.loads(text)
+        return json.loads(text), usage
