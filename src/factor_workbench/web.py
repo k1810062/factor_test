@@ -380,18 +380,32 @@ def _load_ai():
 _load_ai()
 
 with st.expander('AI 因子生成'):
-    report_text = st.text_area('研报内容', height=150, label_visibility='collapsed',
-                                placeholder='粘贴研报或因子想法...')
-    if st.button('生成', key='ai_generate'):
+    st.session_state.setdefault('ai_log', '')
+    _c_log = st.columns([3, 2])
+    with _c_log[0]:
+        report_text = st.text_area('研报内容', height=400, label_visibility='collapsed',
+                                    placeholder='粘贴研报或因子想法...')
+        _gen_clicked = st.button('生成', key='ai_generate')
+    with _c_log[1]:
+        _ai_log = st.session_state.get('ai_log', '')
+        st.text_area('日志', _ai_log, height=400, disabled=True, label_visibility='collapsed')
+    st.markdown('<style>div:has(> textarea[aria-label="日志"]) textarea{font-size:13px!important}</style>', unsafe_allow_html=True)
+
+    if _gen_clicked:
+        st.session_state.ai_gen_count = st.session_state.get('ai_gen_count', 0) + 1
         with st.spinner('LLM 分析中...'):
             import sys as _sys
             if BASE not in _sys.path:
                 _sys.path.insert(0, BASE)
             from factor_generator import generate
-            _r = generate(report_text)
-            if _r.error:
+            try:
+                _r = generate(report_text)
+            except Exception as _exc:
+                st.error(f'生成失败: {_exc}')
+                _r = None
+            if _r and _r.error:
                 st.error(_r.error)
-            else:
+            elif _r:
                 for _fi in _r.factors:
                     _id = st.session_state.ai_next_id
                     st.session_state.ai_next_id += 1
@@ -400,11 +414,20 @@ with st.expander('AI 因子生成'):
                     })
                 st.session_state.ai_pending_sel = st.session_state.ai_pending[0]['id']
                 _save_ai()
+                _rlog = _r.raw_llm_output or {}
+                _rtext = json.dumps(_rlog, ensure_ascii=False, indent=2) if _rlog else ''
+                st.session_state.ai_log = (
+                    f'生成 {len(_r.factors)} 个因子\n'
+                    + '\n'.join(f'  [{f.domain}] {f.name} — {f.label}' for f in _r.factors)
+                    + (f'\n\n--- LLM 原始输出 ---\n{_rtext[:2000]}' if _rtext else '')
+                    + (f'\n\n用量: {_r.usage}' if _r.usage else ''))
                 if _r.usage:
                     u = _r.usage
                     st.toast(f'生成 {len(_r.factors)} 个因子，消耗 {u.get("total_tokens","-")} tokens', icon='🤖')
         st.rerun()
 
+if st.session_state.get('ai_gen_count', 0):
+    st.caption(f'生成运行: {st.session_state.ai_gen_count} 次')
 _pending = st.session_state.ai_pending
 if _pending:
     st.markdown(f'**待处理因子 ({len(_pending)})**')
@@ -428,13 +451,15 @@ if _pending:
         tag = '✅' if r.status == 'available' else '❌'
         dest = f' → {r.matched_table}.{r.matched_field}' if r.matched_table else ''
         st.markdown(f'{tag} {r.description}{dest}')
+    _btn_cols = st.columns([2, 2, 2, 1])
+    with _btn_cols[0]:
+        st.button('刷新数据', disabled=True, help='功能待实现')
     _ai_force = False
     if _all_ok:
-        _c1, _c2 = st.columns([1, 1])
-        with _c1:
+        with _btn_cols[1]:
             _ai_force = st.checkbox('覆盖重算', key='ai_force')
-        with _c2:
-            if st.button('应用并运行', key='ai_run', type='primary'):
+        with _btn_cols[2]:
+            if st.button('运行', key='ai_run', type='primary'):
                 _stdout, _stderr = _run_scratch(_fi.code, force=_ai_force)
                 st.session_state.log = _stdout
                 if _stderr:
@@ -444,6 +469,11 @@ if _pending:
                 st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
                 _save_ai()
                 st.rerun()
+    with _btn_cols[3]:
+        if st.button('删除', key='ai_del'):
+            st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
+            _save_ai()
+            st.rerun()
 
 col_left, col_right = st.columns([3, 2])
 

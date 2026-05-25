@@ -197,6 +197,21 @@ class Pipeline:
         fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
         for factor_type in fc_domains:
             date_col = 'ym' if 'monthly' in str(factor_type) else 'trade_date'
+
+            # 预检查：非覆盖模式下，所有分析已存在则跳过
+            _ow = self.cfg.get('analysis_overwrite', [])
+            if not _ow:
+                _fc = json.load(open('config/factors_config.json')).get(factor_type, {})
+                _adir = self.cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
+                _all_done = all(
+                    os.path.isdir(f'{_adir}/{meta.get("cat", factor_type)}/{name}/{m}')
+                    for m in self.cfg.get('analysis', [])
+                    for name, meta in _fc.items()
+                )
+                if _all_done:
+                    print(f'  [{factor_type}] 所有分析已存在，跳过')
+                    continue
+
             df = self._load_analysis_data(factor_type)
             if df is None:
                 continue

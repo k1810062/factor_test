@@ -30,7 +30,7 @@ def sig_metric(df, col, cn_label, cat, base_path, domain):
     acf1_by_ind = []
     for code, grp in df.groupby(grp_col):
         s = grp[col].dropna()
-        if len(s) < 10:
+        if len(s) < 10 or s.std() == 0:
             continue
         lag1_corr = s.autocorr(lag=1)
         if not np.isnan(lag1_corr):
