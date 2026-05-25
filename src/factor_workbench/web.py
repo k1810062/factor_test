@@ -196,17 +196,7 @@ disp_cols = [c for c in _disp_labels if c in all_factors.columns]
 
 # domain 筛选
 _domains = ['全部'] + sorted(all_factors['domain'].unique()) if 'domain' in all_factors.columns else ['全部']
-_domain_key = 'selected_domain'
-if _domain_key not in st.session_state:
-    st.session_state[_domain_key] = '全部'
-cols = st.columns([1] * len(_domains))
-for i, d in enumerate(_domains):
-    btn_style = 'primary' if st.session_state[_domain_key] == d else 'secondary'
-    if cols[i].button(d, key=f'domain_{d}', type=btn_style, use_container_width=True):
-        st.session_state[_domain_key] = d
-        st.rerun()
-
-_selected = st.session_state[_domain_key]
+_selected = st.selectbox('领域', _domains, label_visibility='collapsed')
 _domain_filter = all_factors['domain'] == _selected if _selected != '全部' else pd.Series([True] * len(all_factors))
 
 c1, c2 = st.columns([4, 1])
