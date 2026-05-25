@@ -451,25 +451,35 @@ if _pending:
         tag = '✅' if r.status == 'available' else '❌'
         dest = f' → {r.matched_table}.{r.matched_field}' if r.matched_table else ''
         st.markdown(f'{tag} {r.description}{dest}')
-    _btn_cols = st.columns([2, 2, 2, 1])
+    _btn_cols = st.columns([2, 3, 1])
     with _btn_cols[0]:
         st.button('刷新数据', disabled=True, help='功能待实现')
     _ai_force = False
+    def _toggle_ai():
+        if st.session_state.ai_force and st.session_state.ai_replace:
+            # 哪个刚被勾上就解除另一个
+            st.session_state.ai_replace = False
+    def _toggle_ai2():
+        if st.session_state.ai_replace and st.session_state.ai_force:
+            st.session_state.ai_force = False
     if _all_ok:
         with _btn_cols[1]:
-            _ai_force = st.checkbox('覆盖重算', key='ai_force')
-        with _btn_cols[2]:
-            if st.button('运行', key='ai_run', type='primary'):
-                _stdout, _stderr = _run_scratch(_fi.code, force=_ai_force)
+            _c = st.columns([1, 1, 1])
+            _ai_force = _c[0].checkbox('覆盖重算', key='ai_force', on_change=_toggle_ai)
+            _ai_replace = _c[1].checkbox('覆盖写入', key='ai_replace', on_change=_toggle_ai2)
+            if _c[2].button('运行', key='ai_run'):
+                _stdout, _stderr = _run_scratch(_fi.code, force=_ai_force or _ai_replace)
                 st.session_state.log = _stdout
                 if _stderr:
                     st.session_state.log += '\n--- 错误 ---\n' + _stderr
+                if _ai_replace and _stdout and '完成' in _stdout:
+                    _replace_factor(_fi.name, 'factor', _fi.code)
                 st.session_state.last_names = [(_fi.name, 'factor')]
                 st.session_state.should_scroll = True
                 st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
                 _save_ai()
                 st.rerun()
-    with _btn_cols[3]:
+    with _btn_cols[2]:
         if st.button('删除', key='ai_del'):
             st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
             _save_ai()
@@ -485,9 +495,11 @@ with col_left:
     code = _result.get('text') or TEMPLATE
     c1, c2, c3 = st.columns(3)
     with c1:
-        force = st.checkbox('覆盖重算')
+        force = st.checkbox('覆盖重算', key='editor_force', on_change=lambda: (
+            st.session_state.update(editor_replace=False) if st.session_state.editor_force and st.session_state.editor_replace else None))
     with c2:
-        replace = st.checkbox('覆盖写入')
+        replace = st.checkbox('覆盖写入', key='editor_replace', on_change=lambda: (
+            st.session_state.update(editor_force=False) if st.session_state.editor_replace and st.session_state.editor_force else None))
     with c3:
         run = st.button('运行', width='stretch')
 
