@@ -352,9 +352,10 @@ with st.expander('AI 因子生成'):
                 for _fi in _r.factors:
                     _id = st.session_state.ai_next_id
                     st.session_state.ai_next_id += 1
-                    st.session_state.ai_pending.append({
+                    st.session_state.ai_pending.insert(0, {
                         'id': _id, 'data': _fi,
                     })
+                st.session_state.ai_pending_sel = st.session_state.ai_pending[0]['id']
                 if _r.usage:
                     u = _r.usage
                     st.toast(f'生成 {len(_r.factors)} 个因子，消耗 {u.get("total_tokens","-")} tokens', icon='🤖')
