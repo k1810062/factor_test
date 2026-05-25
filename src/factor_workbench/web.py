@@ -5,7 +5,7 @@
 
 import ast, time
 import streamlit as st
-import sys, os, json, re, subprocess, tempfile, glob, numpy as np
+import sys, os, json, re, subprocess, tempfile, glob, shutil, numpy as np
 from code_editor import code_editor
 
 from factor_workbench.analysis.chart_renderer import (
@@ -13,7 +13,7 @@ from factor_workbench.analysis.chart_renderer import (
     render_ic_cumulative, render_long_short,
     render_decile_bar, render_win_rate, render_ic_distribution,
 )
-from factor_workbench.engine.registry import get_factors, load_factor_modules
+from factor_workbench.engine.registry import get_factors, load_factor_modules, _FACTORS, _FEATURES
 from pathlib import Path
 from factor_workbench.analysis.auto_config import generate_config
 
@@ -156,6 +156,59 @@ def _run_scratch(code, force=False):
     return result.stdout, result.stderr
 
 
+def _delete_factor(name):
+    """从 .py 文件、因子库、分析结果中彻底删除一个因子。"""
+    meta = get_factors().get(name)
+    if not meta:
+        return
+
+    domain, cat = meta.domain, meta.category
+
+    # 1. 从 .py 文件移除函数
+    for f in sorted(glob.glob(f'{BASE}/factors/*.py')):
+        txt = open(f).read()
+        r = _find_func(txt, name)
+        if r:
+            i, e = r
+            open(f, 'w').write(txt[:i] + txt[e:])
+            print(f'  [删除] 已从 {os.path.basename(f)} 移除函数')
+
+    # 2. 从因子库 parquet 删除列
+    _paths = {
+        'stock': 'output/factor_library/stock_factors.parquet',
+        'industry': 'output/factor_library/industry_factors.parquet',
+        'industry_monthly': 'output/factor_library/industry_monthly_factors.parquet',
+    }
+    fp = _paths.get(domain)
+    if fp and os.path.exists(fp):
+        _lib = pd.read_parquet(fp)
+        if name in _lib.columns:
+            _lib = _lib.drop(columns=[name])
+            _lib.to_parquet(fp, index=False)
+            print(f'  [删除] 已从 {fp} 移除数据列')
+
+    # 3. 删分析结果
+    _ad = f'{BASE}/output/analysis/{domain}'
+    for _d in sorted(glob.glob(f'{_ad}*/{cat}/{name}')):
+        shutil.rmtree(_d)
+        print(f'  [删除] 已删除分析目录 {_d}')
+
+    # 4. 从汇总 CSV 删除行
+    _csv = f'{BASE}/output/result/{domain}_factor_summary.csv'
+    if os.path.exists(_csv):
+        _fdf = pd.read_csv(_csv)
+        _fdf = _fdf[_fdf['factor'] != name]
+        _fdf.to_csv(_csv, index=False, encoding='utf-8-sig')
+        print(f'  [删除] 已从 {domain}_factor_summary.csv 移除')
+
+    # 5. 清注册
+    _FACTORS.clear()
+    _FEATURES.clear()
+    load_factor_modules(['factors', 'features'])
+    print(f'  [删除] {name} 已彻底删除')
+
+
+
 # ---- 因子搜索 ----
 import pandas as pd
 
@@ -199,20 +252,29 @@ _domains = ['全部'] + sorted(all_factors['domain'].unique()) if 'domain' in al
 _selected = st.selectbox('领域', _domains, label_visibility='collapsed')
 _domain_filter = all_factors['domain'] == _selected if _selected != '全部' else pd.Series([True] * len(all_factors))
 
-c1, c2 = st.columns([4, 1])
-with c1:
+_c1, _c2 = st.columns([4, 1])
+with _c1:
     with st.form(key='search_form', border=False):
-        cols = st.columns([3, 1])
-        with cols[0]:
+        _cols = st.columns([3, 1])
+        with _cols[0]:
             q = st.text_input('🔍 搜索因子', placeholder='输入因子名、中文名或分类...',
                              label_visibility='collapsed', key='search_input')
-        with cols[1]:
-            submitted = st.form_submit_button('搜索', width='stretch')
+        with _cols[1]:
+            submitted = st.form_submit_button('搜索', use_container_width=True)
             if submitted:
                 st.session_state.mode = 'search'
-with c2:
-    if st.button('因子列表', width='stretch'):
-        st.session_state.mode = 'list'
+with _c2:
+    _cols = st.columns([3, 1])
+    with _cols[0]:
+        if st.button('因子列表', width='stretch'):
+            st.session_state.mode = 'list'
+            st.session_state.should_scroll = True
+    with _cols[1]:
+        if st.button('↻', help='同步 .py 文件的变更'):
+            _FACTORS.clear()
+            _FEATURES.clear()
+            load_factor_modules(['factors', 'features'])
+            st.rerun()
 
 mode = st.session_state.get('mode', '')
 q_lower = q.lower() if q else ''
@@ -239,8 +301,11 @@ if mode == 'search' and q_lower:
         if event and event.selection and event.selection.rows:
             idx = event.selection.rows[0]
             selected_name = matched.iloc[idx]['factor']
+            _prev = st.session_state.get('_sel', '')
+            st.session_state._sel = selected_name
             st.session_state.last_names = [(selected_name, 'factor')]
-            st.session_state.should_scroll = True
+            if selected_name != _prev:
+                st.session_state.should_scroll = True
     else:
         st.caption(f'未找到含 "{q}" 的因子')
 
@@ -261,8 +326,11 @@ if mode == 'list':
         idx = ev.selection.rows[0]
         _all_names = all_show['因子名'].tolist()
         if idx < len(_all_names):
+            _prev = st.session_state.get('_sel', '')
+            st.session_state._sel = _all_names[idx]
             st.session_state.last_names = [(_all_names[idx], 'factor')]
-            st.session_state.should_scroll = True
+            if _all_names[idx] != _prev:
+                st.session_state.should_scroll = True
 
 col_left, col_right = st.columns([3, 2])
 
@@ -333,13 +401,19 @@ if st.session_state.get('pending'):
 
 st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 
-# ---- 展示选中因子的函数代码 ----
+# ---- 展示选中因子的函数代码 + 删除 ----
 _last = st.session_state.get('last_names', [])
 if _last:
     st.subheader('因子函数代码')
     for _name, _kind in _last:
         _found = _get_func_code(_name, _kind)
         if _found:
+            _bar = st.columns([20, 1])
+            with _bar[1]:
+                with st.popover('⋮'):
+                    if st.button('删除', key=f'del_{_name}'):
+                        _delete_factor(_name)
+                        st.rerun()
             st.code(_found, language='python')
 
 # ---- 显示结果 ----
@@ -480,7 +554,7 @@ if names:
                 html = html.replace('<td>', '<td style="text-align:center">')
                 st.markdown(html, unsafe_allow_html=True)
 
-    # scroll（不受 CSV 影响）
+    # scroll
     if st.session_state.pop('should_scroll', False):
         st.html("""
         <script>document.getElementById('factor-metrics').scrollIntoView({behavior:'smooth',block:'start'})</script>
