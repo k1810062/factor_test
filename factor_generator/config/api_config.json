@@ -1,8 +1,0 @@
-{
-  "provider": "openai",
-  "model": "gpt-4o",
-  "api_key": "${OPENAI_API_KEY}",
-  "endpoint": "https://api.openai.com/v1/chat/completions",
-  "max_tokens": 4096,
-  "temperature": 0.1
-}

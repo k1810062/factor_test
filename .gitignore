@@ -19,3 +19,6 @@ config/
 # 接口文档
 llm_factor_interface.md
 llm_window_guide.md
+
+# API 密钥配置
+factor_generator/config/api_config.json
