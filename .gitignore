@@ -4,7 +4,7 @@ __pycache__/
 .DS_Store
 output/
 data/
-.egg-info
+*.egg-info
 data_backup/
 output_backup/
 factors/
@@ -15,3 +15,7 @@ config/
 
 # 启动脚本
 启动.command
+
+# 接口文档
+llm_factor_interface.md
+llm_window_guide.md
