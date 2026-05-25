@@ -332,6 +332,72 @@ if mode == 'list':
             if _all_names[idx] != _prev:
                 st.session_state.should_scroll = True
 
+# ---- AI 因子生成 ----
+st.session_state.setdefault('ai_pending', [])
+st.session_state.setdefault('ai_next_id', 0)
+
+with st.expander('AI 因子生成'):
+    report_text = st.text_area('研报内容', height=150, label_visibility='collapsed',
+                                placeholder='粘贴研报或因子想法...')
+    if st.button('生成', key='ai_generate'):
+        with st.spinner('LLM 分析中...'):
+            import sys as _sys
+            if BASE not in _sys.path:
+                _sys.path.insert(0, BASE)
+            from factor_generator import generate
+            _r = generate(report_text)
+            if _r.error:
+                st.error(_r.error)
+            else:
+                for _fi in _r.factors:
+                    _id = st.session_state.ai_next_id
+                    st.session_state.ai_next_id += 1
+                    st.session_state.ai_pending.append({
+                        'id': _id, 'data': _fi,
+                    })
+                if _r.usage:
+                    u = _r.usage
+                    st.toast(f'生成 {len(_r.factors)} 个因子，消耗 {u.get("total_tokens","-")} tokens', icon='🤖')
+        st.rerun()
+
+    _pending = st.session_state.ai_pending
+    if _pending:
+        _id2label = {p['id']: f"[{p['data'].name}] {p['data'].label}" for p in _pending}
+        _sel_id = st.selectbox('待处理因子', list(_id2label.keys()),
+                                format_func=lambda i: _id2label[i], key='ai_pending_sel')
+        _item = next(p for p in _pending if p['id'] == _sel_id)
+        _fi = _item['data']
+
+        # 查重
+        _dup_name = None
+        for _f in sorted(glob.glob(f'{BASE}/factors/*.py')):
+            if f"@factor(name='{_fi.name}'" in open(_f).read():
+                _dup_name = os.path.basename(_f)
+                break
+        if _dup_name:
+            st.warning(f'同名因子已存在于 {_dup_name}')
+        st.code(_fi.code, language='python')
+        _all_ok = all(r.status == 'available' for r in _fi.data_requirements)
+        for r in _fi.data_requirements:
+            tag = '✅' if r.status == 'available' else '❌'
+            dest = f' → {r.matched_table}.{r.matched_field}' if r.matched_table else ''
+            st.markdown(f'{tag} {r.description}{dest}')
+        _ai_force = False
+        if _all_ok:
+            _c1, _c2 = st.columns([1, 1])
+            with _c1:
+                _ai_force = st.checkbox('覆盖重算', key='ai_force')
+            with _c2:
+                if st.button('应用并运行', key='ai_run', type='primary'):
+                    _stdout, _stderr = _run_scratch(_fi.code, force=_ai_force)
+                    st.session_state.log = _stdout
+                    if _stderr:
+                        st.session_state.log += '\n--- 错误 ---\n' + _stderr
+                    st.session_state.last_names = [(_fi.name, 'factor')]
+                    st.session_state.should_scroll = True
+                    st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
+                    st.rerun()
+
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
