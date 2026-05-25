@@ -268,7 +268,6 @@ with _c2:
     with _cols[0]:
         if st.button('因子列表', width='stretch'):
             st.session_state.mode = 'list'
-            st.session_state.should_scroll = True
     with _cols[1]:
         if st.button('↻', help='同步 .py 文件的变更'):
             _FACTORS.clear()
