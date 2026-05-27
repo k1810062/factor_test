@@ -58,26 +58,31 @@ def main():
     blocked = []
 
     for fi in result.factors:
-        missing = [r for r in fi.data_requirements if r.status != 'available']
+        missing = [r for r in fi.fields_needed if r.status != 'available']
         if missing:
             blocked.append((fi, missing))
             print(f'\n❌ [{fi.domain}] {fi.name} ({fi.label}) — 缺数据')
             print(f'  逻辑: {fi.logic_summary}')
-            print(f'  代码:\n{fi.code}')
-            for r in fi.data_requirements:
+            if fi.formula:
+                print(f'  SQL:\n{fi.formula}')
+            elif fi.code:
+                print(f'  代码:\n{fi.code}')
+            for r in fi.fields_needed:
                 tag = '✅' if r.status == 'available' else '❌'
-                print(f'  {tag} {r.description} → {r.matched_table}.{r.matched_field}')
+                print(f'  {tag} {r.table}.{r.field}')
             continue
 
         print(f'\n[{fi.domain}] {fi.name} ({fi.label})')
         print(f'  逻辑: {fi.logic_summary}')
-        print(f'  代码:\n{fi.code}')
-        if fi.data_requirements:
-            for r in fi.data_requirements:
+        if fi.formula:
+            print(f'  SQL:\n{fi.formula}')
+        elif fi.code:
+            print(f'  代码:\n{fi.code}')
+        if fi.fields_needed:
+            for r in fi.fields_needed:
                 tag = '✅' if r.status == 'available' else '⚠️'
-                dest = f' → {r.matched_table}.{r.matched_field}' if r.matched_table else ''
-                conf = f' ({r.confidence:.2f})' if r.confidence else ''
-                print(f'  {tag} {r.description}{dest}{conf}')
+                dest = f' → {r.table}.{r.field}' if r.table else ''
+                print(f'  {tag} {r.field}{dest}')
 
         # 查重
         _dup = False
@@ -98,7 +103,7 @@ def main():
         for fi, missing in blocked:
             print(f'  ❌ [{fi.domain}] {fi.name}')
             for m in missing:
-                print(f'    缺: {m.description}')
+                print(f'    缺: {m.table}.{m.field}')
 
     if not to_run:
         print('\n无待运行因子，退出')
@@ -120,10 +125,12 @@ def main():
         return
 
     # 运行
+    from factor_generator.compiler import compile_factor
     for fi, force in to_run:
         print(f'\n运行 [{fi.domain}] {fi.name}...')
+        code = compile_factor(fi)  # 编译 formula → @factor 代码
         tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
-        tmp.write(fi.code)
+        tmp.write(code)
         tmp_path = tmp.name
         tmp.close()
 

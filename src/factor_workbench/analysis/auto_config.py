@@ -18,12 +18,6 @@ DOMAINS = {
                          'analysis_dir': 'output/analysis/industry_monthly'},
 }
 
-# 特征库输出路径（与因子库分开，避免 domain 冲突）
-FEATURE_OUTPUT_PATHS = {
-    'stock': 'output/feature_library/stock_features.parquet',
-}
-
-
 def _scan_parquets(dirs):
     """扫描目录下的 parquet，返回 {表名: 路径}。"""
     tables = {}
@@ -38,7 +32,7 @@ def _scan_parquets(dirs):
 
 def generate_config(config_path='config/config.json'):
     """扫描 parquet 注册到 tables，保证 domain 配置存在。"""
-    tables = _scan_parquets(['data', 'output/feature_library', 'output/factor_library'])
+    tables = _scan_parquets(['data', 'output/factor_library'])
 
     cfg = {}
     if os.path.exists(config_path):
@@ -51,10 +45,6 @@ def generate_config(config_path='config/config.json'):
     for d, info in DOMAINS.items():
         cfg.setdefault('key_cols', {}).setdefault(d, info['key'])
         cfg.setdefault('output_paths', {}).setdefault(d, info['path'])
-
-    # 保证特征库输出路径存在
-    for domain, path in FEATURE_OUTPUT_PATHS.items():
-        cfg.setdefault('feature_output_paths', {}).setdefault(domain, path)
 
     # 每个 domain 独立分析目录
     if not isinstance(cfg.get('analysis_dir'), dict):

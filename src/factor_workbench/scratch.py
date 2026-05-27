@@ -20,11 +20,8 @@ CONFIG_PATH = 'config/config.json'
 _CFG = json.load(open(CONFIG_PATH))
 
 
-def _target(domain, kind='factor'):
-    """按约定返回因子/特征文件的路径。"""
-    base = 'factors' if kind == 'factor' else 'features'
-    return f'{base}/{domain}_{kind}s.py'
-    # 如: factors/industry_factors.py, features/stock_features.py
+def _target(domain):
+    return f'factors/{domain}_factors.py'
 
 
 def _extract_func(code, name, kind='factor'):
@@ -33,7 +30,7 @@ def _extract_func(code, name, kind='factor'):
     if i < 0:
         return code.strip()
     nxt = len(code)
-    for k in ('factor', 'feature', 'metric'):
+    for k in ('factor',):
         p = code.find(f'\n@{k}(', i + 1)
         if 0 < p < nxt:
             nxt = p
@@ -46,10 +43,9 @@ def main():
 
     import ast
     tree = ast.parse(code)
-    factors, features = [], []
+    factors = []
 
     def _get_kw(node, *keys):
-        """从装饰器关键字提取指定参数的值。"""
         for kw in node.keywords:
             if kw.arg in keys:
                 return ast.literal_eval(kw.value)
@@ -61,39 +57,35 @@ def main():
         dec = node.decorator_list[0]
         if not isinstance(dec, ast.Call) or not isinstance(dec.func, ast.Name):
             continue
+        if dec.func.id != 'factor':
+            continue
         name = _get_kw(dec, 'name')
         domain = _get_kw(dec, 'domain')
         if not name or not domain:
             continue
-        if dec.func.id == 'factor':
-            factors.append((name, _get_kw(dec, 'category'), _get_kw(dec, 'label'), domain))
-        elif dec.func.id == 'feature':
-            features.append((name, domain))
+        factors.append((name, _get_kw(dec, 'category'), _get_kw(dec, 'label'), domain))
 
-    if not factors and not features:
-        print('错误：未识别到 @factor 或 @feature 装饰器')
+    if not factors:
+        print('错误：未识别到 @factor 装饰器')
         print('文件内容:')
         print(code[:500])
         sys.exit(1)
 
     # 写配置
-    fc_path, feat_path = 'config/factors_config.json', 'config/features_config.json'
-    fc, feat = {}, {}
+    fc_path = 'config/factors_config.json'
+    fc = {}
     ow = 'overwrite' if '--force' in sys.argv else 'skip'
     print(f'  → 模式: {ow}{" (--force)" if "--force" in sys.argv else ""}')
     for name, cat, label, domain in factors:
         fc.setdefault(domain, {})[name] = {'cat': cat, 'label': label, 'mode': ow}
-    for name, domain in features:
-        feat.setdefault(domain, {})[name] = {'mode': ow}
     json.dump(fc, open(fc_path, 'w'), ensure_ascii=False, indent=2)
-    json.dump(feat, open(feat_path, 'w'), ensure_ascii=False, indent=2)
-    if fc: print(f'  → factors_config.json（{sum(len(v) for v in fc.values())} 个因子）')
-    if feat: print(f'  → features_config.json（{sum(len(v) for v in feat.values())} 个特征, mode={ow}）')
+    if fc:
+        print(f'  → factors_config.json（{sum(len(v) for v in fc.values())} 个因子）')
 
     # 写 config.json（基础设施）
     old_cfg = json.load(open(CONFIG_PATH)) if os.path.exists(CONFIG_PATH) else {}
     cfg = {}
-    for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir', 'feature_output_paths'):
+    for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir'):
         if k in old_cfg:
             cfg[k] = old_cfg[k]
     cfg['analysis'] = ['charts', 'ic', 'rr', 'sig']
@@ -104,12 +96,12 @@ def main():
     json.dump(cfg, open(CONFIG_PATH, 'w'), ensure_ascii=False, indent=2)
     print('  → config.json 已改写（基础设施）')
 
-    # 跑 Pipeline（串行，直接使用 exec 动态注册的代码）
+    # 跑 Pipeline
     print('\n=== 运行 Pipeline ===')
     from .engine.pipeline import Pipeline
-    from .engine.registry import factor, feature
+    from .engine.registry import factor
     p = Pipeline(CONFIG_PATH, backend='duckdb')
-    exec(compile(open(path).read(), path, 'exec'), {'factor': factor, 'feature': feature})
+    exec(compile(open(path).read(), path, 'exec'), {'factor': factor})
 
     success = False
     try:
@@ -118,10 +110,10 @@ def main():
     finally:
         p.close()
 
-    # pipeline 成功后写入因子/特征文件
+    # pipeline 成功后写入因子文件
     if success:
         for name, cat, label, domain in factors:
-            target = _target(domain, 'factor')
+            target = _target(domain)
             if not os.path.exists(target):
                 open(target, 'w').write(f'# {domain} 因子\n')
                 print(f'  [创建] {target}')
@@ -133,20 +125,6 @@ def main():
             with open(target, 'a') as f:
                 f.write('\n\n# ─── 新增因子 ───\n' + func_code + '\n')
             print(f'  [{name}] → 已加入因子库')
-        for name, domain in features:
-            target = _target(domain, 'feature')
-            if not os.path.exists(target):
-                os.makedirs(os.path.dirname(target), exist_ok=True)
-                open(target, 'w').write(f'# {domain} 特征\n')
-                print(f'  [创建] {target}')
-            existing = open(target).read()
-            if f"@feature(name='{name}'" in existing:
-                print(f'  [{name}] 已存在，跳过')
-                continue
-            func_code = _extract_func(code, name, 'feature')
-            with open(target, 'a') as f:
-                f.write('\n\n# ─── 新增特征 ───\n' + func_code + '\n')
-            print(f'  [{name}] → 已加入特征库')
 
 
 def __main():

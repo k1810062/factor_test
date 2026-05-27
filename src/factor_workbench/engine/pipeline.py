@@ -10,9 +10,8 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .data_api import DataAPI
-from .registry import get_factors, get_features, load_factor_modules
-from .metric_runner import run_metrics
-from ..metrics import chart_metric, ic_metric, rr_metric, sig_metric
+from .registry import get_factors, load_factor_modules
+from .metric_runner import run_groups
 
 def _try_read(path):
     try:
@@ -25,9 +24,8 @@ def _factor_worker(domain, name, backend, factor_dir='factors', tables=None):
     """进程池 worker：初始化 API → 运行因子 → 返回结果 DataFrame。"""
     from factor_workbench.engine.registry import load_factor_modules
     from factor_workbench.engine.data_api import DataAPI
-    load_factor_modules(['factors', 'features'])
+    load_factor_modules(['factors'])
     factors = get_factors(domain=domain)
-    factors.update(get_features(domain=domain))
     meta = factors.get(name)
     if meta is None:
         return name, None
@@ -48,18 +46,11 @@ class Pipeline:
         self.backend = backend
         self.api = DataAPI(backend=backend, tables=self.cfg.get('tables'))
         self._load_data_fn = load_analysis_data
-        load_factor_modules(['factors', 'features'])
+        load_factor_modules(['factors'])
 
     def run(self):
         """全流程入口。"""
         t0 = time.time()
-
-        # 计算特征（存 feature_library）
-        if os.path.exists('config/features_config.json'):
-            for domain, factors in json.load(open('config/features_config.json')).items():
-                self.cfg['output_paths'][domain] = self.cfg['feature_output_paths'][domain]
-                print(f'\n=== {domain} 特征计算 ===')
-                self._compute_domain(domain, factors)
 
         # 计算因子（存 factor_library）
         if os.path.exists('config/factors_config.json'):
@@ -91,9 +82,8 @@ class Pipeline:
         else:
             existing_cols = set()
 
-        # 过滤出需要计算的（因子+特征）
+        # 过滤出需要计算的
         factors = get_factors(domain=domain)
-        factors.update(get_features(domain=domain))
         to_compute = []
         overwrite_names = set()
 
@@ -113,10 +103,10 @@ class Pipeline:
                 to_compute.append(name)
 
         if not to_compute:
-            print('  [跳过] 全部已存在')
+            print(f'  {domain} 因子已全部存在，跳过计算')
             return
 
-        print(f'  需计算: {to_compute} ({len(to_compute)} 个)')
+        print(f'  待计算: {to_compute} ({len(to_compute)} 个)')
 
         # 并行计算
         t1 = time.time()
@@ -178,34 +168,31 @@ class Pipeline:
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         result_df.to_parquet(output_path, index=False)
-        print(f'  → 保存 {output_path} ({len(result_df)} 行, '
-              f'{len([c for c in result_df.columns if c not in key_cols])} 个因子)')
+        print(f'  → 保存 {output_path}')
+        print(f'  [{domain}] 耗时: {time.time()-t1:.1f}s')
 
     def _run_analysis(self):
-        """运行评价指标（直接调 @metric 函数）。"""
-        analysis = self.cfg.get('analysis', [])
-        if not analysis:
-            return
-
-        # 注册因子库/特征库表（刚算完的文件可能还没注册）
-        for pkey in ('output_paths', 'feature_output_paths'):
-            for domain, p in self.cfg.get(pkey, {}).items():
-                pname = os.path.splitext(os.path.basename(p))[0]
-                if pname not in self.cfg.get('tables', {}):
-                    self.api.register_table(pname, p)
-
+        """运行评价指标（按 domain_config 组调度）。"""
         fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
         for factor_type in fc_domains:
             date_col = 'ym' if 'monthly' in str(factor_type) else 'trade_date'
 
-            # 预检查：非覆盖模式下，所有分析已存在则跳过
-            _ow = self.cfg.get('analysis_overwrite', [])
-            if not _ow:
+            # 注册因子库表（刚算完的文件可能还没注册）
+            for domain, p in self.cfg.get('output_paths', {}).items():
+                pname = os.path.splitext(os.path.basename(p))[0]
+                if pname not in self.cfg.get('tables', {}):
+                    self.api.register_table(pname, p)
+
+            # 预检查：非覆盖模式下，所有分析组已存在则跳过
+            from config.domain_config import DOMAIN_CONFIG
+            dc = DOMAIN_CONFIG.get(factor_type)
+            if dc and not self.cfg.get('analysis_overwrite', []):
                 _fc = json.load(open('config/factors_config.json')).get(factor_type, {})
                 _adir = self.cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
-                _all_done = all(
-                    os.path.isdir(f'{_adir}/{meta.get("cat", factor_type)}/{name}/{m}')
-                    for m in self.cfg.get('analysis', [])
+                groups = dc.get('analysis_groups', [])
+                _all_done = groups and all(
+                    os.path.isdir(f'{_adir}/{meta.get("cat", factor_type)}/{name}/{g}')
+                    for g in groups
                     for name, meta in _fc.items()
                 )
                 if _all_done:
@@ -215,11 +202,10 @@ class Pipeline:
             df = self._load_analysis_data(factor_type)
             if df is None:
                 continue
-            for name in analysis:
-                t0 = time.time()
-                print(f'\n=== {factor_type} {name} 分析 ===')
-                run_metrics(self.cfg, factor_type, df, date_col=date_col, check_subdir=name)
-                print(f'  [{name}] 耗时: {time.time()-t0:.1f}s')
+            t0 = time.time()
+            print(f'\n=== {factor_type} 分析 ===')
+            run_groups(self.cfg, factor_type, df, date_col=date_col)
+            print(f'  [{factor_type}] 总耗时: {time.time()-t0:.1f}s')
 
     def _load_analysis_data(self, factor_type):
         """加载分析用的数据。支持外部自定义函数。"""

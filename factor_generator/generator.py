@@ -19,14 +19,9 @@ _DEFAULT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'config')
 @dataclass
 class RequirementInfo:
     """数据需求标注结果。"""
-    description: str            # 字段的自然语言描述（如"行业指数收盘价"）
-    table_desc: str = ''        # 表描述（如"行业指数日线行情"）
-    status: str = 'missing'      # available / missing / need_derive
-    alias_table: str | None = None
-    alias_field: str | None = None
-    matched_table: str | None = None
-    matched_field: str | None = None
-    confidence: float | None = None
+    table: str = ''              # 表名
+    field: str = ''              # 字段名
+    status: str = 'missing'      # available / missing
 
 
 @dataclass
@@ -36,9 +31,12 @@ class FactorInfo:
     label: str
     category: str
     domain: str
-    code: str
-    logic_summary: str
-    data_requirements: list[RequirementInfo] = field(default_factory=list)
+    formula: str = ''                               # SQL 查询
+    code: str = ''                                  # @factor 代码（compiler 填充或 raw 模式直接用）
+    raw: bool = False                               # 是否 raw 模式（完整代码，不走 compiler）
+    logic_summary: str = ''
+    tables_needed: list[str] = field(default_factory=list)
+    fields_needed: list[RequirementInfo] = field(default_factory=list)
 
 
 @dataclass
@@ -67,6 +65,60 @@ def _resolve_config_path(config_dir: str, filename: str) -> str:
     if not os.path.exists(path):
         raise FileNotFoundError(f'配置文件不存在: {path}')
     return path
+
+
+def generate_toc(
+    report_text: str,
+    config_dir: str | None = None,
+) -> FactorOutput:
+    """提取因子目录（TOC），不含完整代码。"""
+    if config_dir is None:
+        config_dir = _DEFAULT_CONFIG_DIR
+
+    try:
+        api_config = _load_json(
+            _resolve_config_path(config_dir, 'api_config.json'))
+        prompt_template = _load_text(
+            os.path.join(config_dir, 'prompt_toc.txt'))
+        data_dict = _load_json(
+            _resolve_config_path(config_dir, 'data_dictionary.json'))
+    except FileNotFoundError as e:
+        return FactorOutput(factors=[], error=str(e))
+    except json.JSONDecodeError as e:
+        return FactorOutput(factors=[], error=f'配置文件格式错误: {e}')
+
+    data_dict_lines = ['# 可用数据表\n']
+    for t in data_dict.get('tables', []):
+        tname = t['name']
+        tdesc = t.get('description', '')
+        data_dict_lines.append(f'\n## {tname}（{tdesc}）')
+        for f in t.get('fields', []):
+            data_dict_lines.append(f'  {tname}.{f["name"]} — {f.get("description", "")}')
+    data_dict_str = '\n'.join(data_dict_lines)
+
+    system_prompt = prompt_template.replace(
+        '{data_dict}', data_dict_str).replace(
+        '{report_text}', report_text)
+
+    try:
+        client = LLMClient(api_config)
+        raw, llm_usage = client.call_json(system_prompt, '')
+    except (LLMError, json.JSONDecodeError, KeyError) as e:
+        import traceback
+        return FactorOutput(factors=[], error=f'LLM 调用失败: {e}\n{traceback.format_exc()}')
+
+    result = FactorOutput(factors=[], raw_llm_output=raw, usage=llm_usage)
+    factors_raw = raw.get('factors', [])
+    for f in factors_raw:
+        result.factors.append(FactorInfo(
+            name=f.get('name', ''),
+            label=f.get('label', ''),
+            category=f.get('category', ''),
+            domain=f.get('domain', ''),
+            formula='',
+            logic_summary=f.get('logic_summary', ''),
+        ))
+    return result
 
 
 def _apply_code_mapping(code: str,
@@ -182,24 +234,21 @@ def generate(
             error=f'LLM 输出解析失败: {e}',
         )
 
-    for fi in factor_output:
-        if fi.data_requirements:
-            new_reqs: list[RequirementInfo] = []
-            for req in fi.data_requirements:
-                new_reqs.append(req)
-
-            fi.data_requirements = new_reqs
-
     return FactorOutput(factors=factor_output, raw_llm_output=raw, usage=llm_usage)
 
 
 def reapply(llm_output_path: str, config_dir: str | None = None) -> FactorOutput:
-    """复用已保存的 LLM 输出，重新匹配 + 替换，不调 LLM。
-
+    """复用已保存的 LLM 输出，重新匹配，不调 LLM。
     用户补完数据后调用此函数，无需重新生成。
     """
     if config_dir is None:
         config_dir = _DEFAULT_CONFIG_DIR
+
+    try:
+        data_dict = _load_json(
+            _resolve_config_path(config_dir, 'data_dictionary.json'))
+    except FileNotFoundError as e:
+        return FactorOutput(factors=[], error=f'数据字典不存在: {e}')
 
     with open(llm_output_path, encoding='utf-8') as f:
         raw = json.load(f)
@@ -209,16 +258,14 @@ def reapply(llm_output_path: str, config_dir: str | None = None) -> FactorOutput
     except (KeyError, TypeError, ValueError) as e:
         return FactorOutput(factors=[], raw_llm_output=raw, error=f'解析失败: {e}')
 
-    try:
-        data_dict = _load_json(
-            _resolve_config_path(config_dir, 'data_dictionary.json'))
-    except FileNotFoundError as e:
-        return FactorOutput(factors=factor_output, raw_llm_output=raw, error=f'数据字典不存在: {e}')
-
-    # LLM 直接输出真实表名和字段名，不再需要匹配
+    # 重新校验 available/missing（数据字典可能已更新）
+    valid_fields: dict[str, set[str]] = {}
+    for t in data_dict.get('tables', []):
+        valid_fields[t['name']] = {f['name'] for f in t.get('fields', [])}
     for fi in factor_output:
-        for req in fi.data_requirements:
-            req.status = 'available' if req.matched_table else 'missing'
+        for req in fi.fields_needed:
+            if valid_fields.get(req.table) and req.field in valid_fields[req.table]:
+                req.status = 'available'
 
     return FactorOutput(factors=factor_output, raw_llm_output=raw)
 
@@ -237,63 +284,40 @@ def _parse_llm_output(raw: dict, data_dict=None) -> list[FactorInfo]:
 
     result: list[FactorInfo] = []
     for f in factors_raw:
-        aliases_raw = f.get('aliases', {})
-        reqs_raw = f.get('data_requirements', [])
+        # 解析字段需求（格式：表名.字段名）
+        fields_raw = f.get('fields_needed', [])
         reqs: list[RequirementInfo] = []
-
-        for r in reqs_raw:
-            # 新格式：LLM 直接输出 table + field（真实名）
-            table = r.get('table') or r.get('table_desc', '')
-            field = r.get('field') or r.get('field_desc', '') or r.get('description', '')
-            alias_table = r.get('alias_table') or table
-            alias_field = r.get('alias_field') or field
-
-            if not alias_table:
-                for key, val in aliases_raw.items():
-                    if val.get('type') == 'table' and val.get('description') == table:
-                        alias_table = key
-                        break
-
-            # 校验字段是否真实存在
-            _field_ok = False
-            if table and field and valid_fields:
-                _tbl_fields = valid_fields.get(table)
-                if _tbl_fields and field in _tbl_fields:
-                    _field_ok = True
+        for entry in fields_raw:
+            entry_str = str(entry)
+            if '.' in entry_str:
+                tbl, col = entry_str.split('.', 1)
+            else:
+                tbl, col = '', entry_str
+            _ok = bool(tbl and col and valid_fields and
+                       valid_fields.get(tbl) and col in valid_fields[tbl])
             reqs.append(RequirementInfo(
-                description=field,
-                table_desc=table,
-                status='available' if _field_ok else 'missing',
-                alias_table=alias_table,
-                alias_field=alias_field,
-                matched_table=table if table and '.' not in table else None,
-                matched_field=field,
+                table=tbl, field=col,
+                status='available' if _ok else 'missing',
             ))
 
-        # 兼容旧格式：从 aliases 生成（field 级别）
-        if not reqs and aliases_raw:
-            for key, val in aliases_raw.items():
-                if val.get('type') == 'field':
-                    parts = key.split('.', 1)
-                    alias_t = parts[0] if len(parts) > 1 else None
-                    alias_f = parts[1] if len(parts) > 1 else parts[0]
-                    table_desc = aliases_raw.get(alias_t, {}).get('description', '') if alias_t else ''
-                    reqs.append(RequirementInfo(
-                        description=val.get('description', ''),
-                        table_desc=table_desc,
-                        status='missing',
-                        alias_table=alias_t,
-                        alias_field=alias_f,
-                    ))
+        # tables_needed（简单字符串列表）
+        tables_raw = f.get('tables_needed', [])
+
+        # raw 模式：不走 compiler，直接使用 LLM 输出的完整代码
+        raw_mode = f.get('raw', False)
+        code_val = f.get('code', '') if raw_mode else ''
 
         result.append(FactorInfo(
             name=f['name'],
             label=f.get('label', ''),
             category=f.get('category', ''),
             domain=f.get('domain', ''),
-            code=f.get('code', ''),
+            formula=f.get('formula', ''),
+            code=code_val,
+            raw=raw_mode,
             logic_summary=f.get('logic_summary', ''),
-            data_requirements=reqs,
+            tables_needed=list(tables_raw),
+            fields_needed=reqs,
         ))
 
     return result

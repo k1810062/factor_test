@@ -1,15 +1,24 @@
-"""评价指标调度。替代 analysis/analysis_base.py 和 analyze_all.py。"""
+"""评价指标调度。按 domain_config 配置运行分析组。"""
 
 import json
 import os
 import shutil
 import glob
 import pandas as pd
-from .registry import get_metrics
+from config.domain_config import DOMAIN_CONFIG
+from ..metrics.groups import ANALYSIS_GROUPS
+
+# 分析组名称 → 输出子目录映射（用于跳过检查）
+_GROUP_DIRS = {
+    'ic': 'ic',
+    'decile': 'ret',
+    'sig': 'sig',
+    'rr': 'rr',
+    'ts': 'charts',
+}
 
 
 def _load_factors(factor_type):
-    """从 factors.config 读指定 domain 的因子列表。"""
     path = 'config/factors_config.json'
     if not os.path.exists(path):
         return {}
@@ -19,65 +28,79 @@ def _load_factors(factor_type):
 def _get_overwrite(cfg, factor_type, col):
     src = _load_factors(factor_type)
     meta = src.get(col, {})
-    # 支持两种格式：overwrite: [list] 或 mode: "overwrite"
     ow = meta.get('overwrite', [])
     if ow:
         return ow
     if meta.get('mode') == 'overwrite':
-        return [cfg.get('analysis', []) if isinstance(cfg.get('analysis'), list) else ['charts', 'ic', 'rr', 'sig']]
+        return ['charts', 'ic', 'rr', 'sig']
     return []
 
 
-def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
-    """对所有因子运行配置中的评价指标（串行）。"""
-    analysis_dir = cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
-    base_dir = os.path.dirname(analysis_dir)
+def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
+    """按 domain_config 运行分析组。"""
+    domain_cfg = DOMAIN_CONFIG.get(factor_type)
+    if not domain_cfg:
+        print(f'  [{factor_type}] 无 domain 配置，跳过分析')
+        return
+    if base_dir is None:
+        base_dir = cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
 
     src = _load_factors(factor_type)
     factors = [(k, v['label'], v['cat']) for k, v in src.items()]
     if not factors:
+        print(f'  [{factor_type}] 无因子，跳过')
         return
 
-    meta = get_metrics().get(check_subdir)
-    if meta is None:
+    groups = domain_cfg.get('analysis_groups', [])
+    if not groups:
+        print(f'  [{factor_type}] 无分析组配置')
         return
 
-    # 全局覆盖（domain 化路径）
+    # 全局覆盖
     global_ow = cfg.get('analysis_overwrite', [])
-    if check_subdir and check_subdir in global_ow:
-        for col, _, cat in factors:
-            for chk in glob.glob(f'{analysis_dir}*/{cat}/{col}/{check_subdir}'):
-                if os.path.isdir(chk):
-                    shutil.rmtree(chk)
-                    print(f'  [覆盖] {chk}')
+    for group_name in groups:
+        if group_name in global_ow:
+            for col, _, cat in factors:
+                for chk in glob.glob(f'{base_dir}*/{cat}/{col}/{group_name}'):
+                    if os.path.isdir(chk):
+                        shutil.rmtree(chk)
+                        print(f'  [覆盖] {chk}')
 
-    def _skip_factor(d, col):
-        chk = f'{d}/{check_subdir}' if check_subdir else d
-        if check_subdir and check_subdir in _get_overwrite(cfg, factor_type, col):
-            if os.path.exists(chk):
-                shutil.rmtree(chk)
-                print(f'  [{col}] overwrite {check_subdir}')
-        return os.path.exists(chk) and os.listdir(chk)
-
-    # ---- 全量分析 ----
-    print(f'开始分析，共 {len(factors)} 个因子\n')
-    for col, cn, cat in factors:
-        factor_dir = f'{analysis_dir}/{cat}/{col}'
-        if _skip_factor(factor_dir, col):
-            print(f'  [{col}] 已分析，跳过')
+    # 逐组运行
+    print(f'开始分析 {factor_type}，共 {len(factors)} 个因子，组: {groups}')
+    for group_name in groups:
+        group_fn = ANALYSIS_GROUPS.get(group_name)
+        if not group_fn:
+            print(f'  [{factor_type}] 未知分析组: {group_name}')
             continue
-        meta.fn(df, col, cn, cat, factor_dir, domain=factor_type)
-        print(f'  [{col}] 完成')
+        group_cfg = domain_cfg.get(group_name, {})
+        for col, cn, cat in factors:
+            factor_dir = f'{base_dir}/{cat}/{col}'
+            chk = f'{factor_dir}/{_GROUP_DIRS.get(group_name, group_name)}'
+            # 检查是否需要跳过（已存在且非 overwrite）
+            if group_name in _get_overwrite(cfg, factor_type, col):
+                if os.path.exists(chk):
+                    shutil.rmtree(chk)
+                    print(f'  [{col}] overwrite {group_name}')
+            if os.path.exists(chk) and os.listdir(chk):
+                print(f'  [{col}] {group_name} 已分析，跳过')
+                continue
+            try:
+                group_fn(df, col, cn, factor_dir, group_cfg, domain_cfg)
+            except Exception as e:
+                print(f'  [{col}] {group_name} 分析失败: {e}')
+                import traceback
+                traceback.print_exc()
 
-    # ---- 子区间分析 ----
+    # 子区间分析
     sp = cfg.get('sub_period', {'from_file': 'data/market_periods.json',
                                  'groups': ['bull', 'bear', 'consolidate']})
     if 'from_file' in sp:
         ext = json.load(open(sp['from_file']))
         names = sp.get('groups', list(ext.keys()))
         sp = {'groups': [ext[name] for name in names]}
-    groups = sp.get('groups', [sp] if sp else [])
-    for group in groups:
+    groups_sub = sp.get('groups', [sp] if sp else [])
+    for group in groups_sub:
         ranges = []
         if isinstance(group, dict):
             if 'ranges' in group:
@@ -102,23 +125,32 @@ def run_metrics(cfg, factor_type, df, date_col='trade_date', check_subdir=None):
             else:
                 seg = df[(df[date_col] >= start) & (df[date_col] <= end)]
             segments.append(seg)
-        _sk = 'stock_code' if factor_type.startswith('stock') else 'industry_code'
-        df_sub = pd.concat(segments).sort_values(
-            [_sk, date_col]).reset_index(drop=True)
+        key_col = domain_cfg['key_col']
+        df_sub = pd.concat(segments).sort_values([key_col, date_col]).reset_index(drop=True)
 
         if len(df_sub) == 0:
             print(f'  [{suffix}] 无数据，跳过')
             continue
 
-        sub_dir = f'{analysis_dir}_{suffix}'
+        sub_dir = f'{base_dir}_{suffix}'
         os.makedirs(sub_dir, exist_ok=True)
         print(f'\n=== 子区间分析：{suffix} ===')
-        for col, cn, cat in factors:
-            factor_dir = f'{sub_dir}/{cat}/{col}'
-            if _skip_factor(factor_dir, col):
-                print(f'  [{col}] 已分析，跳过')
+        for group_name in groups:
+            group_fn = ANALYSIS_GROUPS.get(group_name)
+            if not group_fn:
                 continue
-            meta.fn(df_sub, col, cn, cat, factor_dir, domain=factor_type)
-            print(f'  [{col}] 完成')
+            group_cfg = domain_cfg.get(group_name, {})
+            for col, cn, cat in factors:
+                factor_dir = f'{sub_dir}/{cat}/{col}'
+                chk = f'{factor_dir}/{_GROUP_DIRS.get(group_name, group_name)}'
+                if group_name in _get_overwrite(cfg, factor_type, col):
+                    if os.path.exists(chk):
+                        shutil.rmtree(chk)
+                if os.path.exists(chk) and os.listdir(chk):
+                    continue
+                try:
+                    group_fn(df_sub, col, cn, factor_dir, group_cfg, domain_cfg)
+                except Exception as e:
+                    print(f'  [{col}] {group_name} 子区间分析失败: {e}')
 
-    print(f'\n全部完成！结果保存在 {analysis_dir}/')
+    print(f'\n{domain_cfg.get("freq", factor_type)} 域分析完成！结果保存在 {base_dir}/')
