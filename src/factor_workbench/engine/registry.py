@@ -81,6 +81,11 @@ def metric(name, label):
     return wrapper
 
 
+def get_factor(name, domain):
+    """精确查询：domain:name 无歧义。"""
+    return _FACTORS.get(f'{domain}:{name}')
+
+
 def get_factors(domain=None, category=None):
     """查询已注册的因子。"""
     result = {}

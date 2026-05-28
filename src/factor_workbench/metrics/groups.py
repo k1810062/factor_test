@@ -35,7 +35,7 @@ def _calc_rank_ic(df, factor_col, ret_col):
     dates, ics = [], []
     for date, grp in df.groupby('trade_date'):
         vals = grp[[factor_col, ret_col]].dropna()
-        if len(vals) < 10:
+        if len(vals) < 10 or vals[factor_col].nunique() < 2 or vals[ret_col].nunique() < 2:
             continue
         ic, _ = spearmanr(vals[factor_col], vals[ret_col])
         dates.append(date)
@@ -291,6 +291,10 @@ def run_sig(df, factor_col, label, output_path, cfg, domain_cfg):
     for code, grp in df.groupby(key_col):
         s = grp[factor_col].dropna()
         if len(s) < 10 or s.std() == 0:
+            continue
+        # autocorr 内部用 np.corrcoef，切片也可能零方差
+        s1, s2 = s[:-1], s[1:]
+        if len(s1) < 2 or s1.std() == 0 or s2.std() == 0:
             continue
         lag1_corr = s.autocorr(lag=1)
         if not np.isnan(lag1_corr):

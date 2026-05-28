@@ -28,6 +28,7 @@ st.title('因子测试')
 st.markdown("""
 <style>
     textarea[aria-label="运行日志"] { font-size: 12px !important; white-space: pre-wrap !important; word-break: break-all !important; }
+    pre { white-space: pre-wrap !important; word-break: break-all !important; }
     .stPlotlyChart { margin-top: 40px; }
     [data-testid="stHeading"] { margin-top: 40px !important; }
     .stDataFrame thead th { text-align: center !important; }
@@ -59,7 +60,7 @@ def _find_func(txt, name):
 
 
 def _parse_decorators(code):
-    """从代码中提取 (name, kind) 列表。识别所有 @xxx(name=...) 格式。"""
+    """从代码中提取 (name, kind, domain) 列表。"""
     import ast
     tree = ast.parse(code)
     items = []
@@ -68,8 +69,9 @@ def _parse_decorators(code):
             dec = node.decorator_list[0]
             if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
                 name = next((ast.literal_eval(kw.value) for kw in dec.keywords if kw.arg == 'name'), None)
+                domain = next((ast.literal_eval(kw.value) for kw in dec.keywords if kw.arg == 'domain'), 'stock')
                 if name and dec.func.id == 'factor':
-                    items.append((name, 'factor'))
+                    items.append((name, 'factor', domain))
     return items
 
 
@@ -149,9 +151,10 @@ def _run_scratch(code, force=False):
     return result.stdout, result.stderr
 
 
-def _delete_factor(name):
+def _delete_factor(name, domain=None):
     """从 .py 文件、因子库、分析结果中彻底删除一个因子。"""
-    meta = get_factors().get(name)
+    from factor_workbench.engine.registry import get_factor as _gf
+    meta = _gf(name, domain) if domain else get_factors().get(name)
     if not meta:
         return
 
@@ -240,9 +243,68 @@ _disp_labels = {
 }
 disp_cols = [c for c in _disp_labels if c in all_factors.columns]
 
-# domain 筛选
+# domain 筛选 + 批量运行
 _domains = ['全部'] + sorted(all_factors['domain'].unique()) if 'domain' in all_factors.columns else ['全部']
-_selected = st.selectbox('领域', _domains, label_visibility='collapsed')
+_ds_cols = st.columns([3, 1])
+with _ds_cols[0]:
+    _selected = st.selectbox('领域', _domains, label_visibility='collapsed')
+with _ds_cols[1]:
+    with st.popover('批量运行'):
+        _mode = st.radio('模式', ['skip', 'overwrite'], horizontal=True, key='batch_mode')
+
+        # 按 domain 分组
+        _dom_groups = {}
+        _all_keys = []
+        for _bk, _bm in sorted(_FACTORS.items()):
+            _dom_groups.setdefault(_bm.domain, []).append((_bk, _bm))
+            _all_keys.append(f'batch_f_{_bk}')
+
+        # 全选（全部 domain）
+        _gk = 'batch_all'
+        if '_prev_' + _gk not in st.session_state:
+            st.session_state['_prev_' + _gk] = False
+        _g_cur = st.checkbox('全选所有领域', key=_gk)
+        _g_prev = st.session_state['_prev_' + _gk]
+        if _g_cur != _g_prev:
+            for _t in _all_keys:
+                st.session_state[_t] = _g_cur
+        st.session_state['_prev_' + _gk] = _g_cur
+
+        # 逐 domain 渲染
+        _sel_factors = []
+        for _dom, _items in sorted(_dom_groups.items()):
+            _dom_targets = [f'batch_f_{_bk}' for _bk, _bm in _items]
+            with st.expander(f'{_dom} ({len(_items)})', expanded=False):
+                _dk = f'batch_dom_{_dom}'
+                if '_prev_' + _dk not in st.session_state:
+                    st.session_state['_prev_' + _dk] = False
+                _d_cur = st.checkbox(f'全选 {_dom}', key=_dk)
+                _d_prev = st.session_state['_prev_' + _dk]
+                if _d_cur != _d_prev:
+                    for _t in _dom_targets:
+                        st.session_state[_t] = _d_cur
+                st.session_state['_prev_' + _dk] = _d_cur
+                for _bk, _bm in _items:
+                    if st.checkbox(f'{_bm.name} ({_bm.label})', key=f'batch_f_{_bk}'):
+                        _sel_factors.append(_bm)
+
+        if st.button(f'执行 ({len(_sel_factors)} 个)'):
+            import tempfile
+            _log_lines = []
+            for _meta in _sel_factors:
+                _code = _get_func_code(_meta.name, 'factor', domain=_meta.domain)
+                if not _code:
+                    _log_lines.append(f'[{_meta.name}] 无代码')
+                    continue
+                _force = _mode == 'overwrite'
+                _out, _err = _run_scratch(_code, force=_force)
+                if _err:
+                    _log_lines.append(f'[{_meta.name}] ❌ {_err[:800]}')
+                else:
+                    _log_lines.append(f'[{_meta.name}] ✅')
+            st.session_state.ai_log = '\n'.join(_log_lines)
+            st.rerun()
+
 _domain_filter = all_factors['domain'] == _selected if _selected != '全部' else pd.Series([True] * len(all_factors))
 
 _c1, _c2 = st.columns([4, 1])
@@ -266,62 +328,6 @@ with _c2:
             _FACTORS.clear()
             load_factor_modules(['factors'])
             st.rerun()
-    with _cols[1]:
-        with st.popover('全量跑'):
-            _mode = st.radio('模式', ['skip', 'overwrite'], horizontal=True, key='batch_mode')
-
-            # 按 domain 分组
-            _dom_groups = {}
-            _all_keys = []
-            for _bk, _bm in sorted(_FACTORS.items()):
-                _dom_groups.setdefault(_bm.domain, []).append((_bk, _bm))
-                _all_keys.append(f'batch_f_{_bk}')
-
-            # 全选（全部 domain）— 同步逻辑在个体复选框之前
-            _gk = 'batch_all'
-            if '_prev_' + _gk not in st.session_state:
-                st.session_state['_prev_' + _gk] = False
-            _g_cur = st.checkbox('全选所有领域', key=_gk)
-            _g_prev = st.session_state['_prev_' + _gk]
-            if _g_cur != _g_prev:
-                for _t in _all_keys:
-                    st.session_state[_t] = _g_cur
-            st.session_state['_prev_' + _gk] = _g_cur
-
-            # 逐 domain 渲染
-            _sel_factors = []
-            for _dom, _items in sorted(_dom_groups.items()):
-                _dom_targets = [f'batch_f_{_bk}' for _bk, _bm in _items]
-                with st.expander(f'{_dom} ({len(_items)})', expanded=False):
-                    _dk = f'batch_dom_{_dom}'
-                    if '_prev_' + _dk not in st.session_state:
-                        st.session_state['_prev_' + _dk] = False
-                    _d_cur = st.checkbox(f'全选 {_dom}', key=_dk)
-                    _d_prev = st.session_state['_prev_' + _dk]
-                    if _d_cur != _d_prev:
-                        for _t in _dom_targets:
-                            st.session_state[_t] = _d_cur
-                    st.session_state['_prev_' + _dk] = _d_cur
-                    for _bk, _bm in _items:
-                        if st.checkbox(f'{_bm.name} ({_bm.label})', key=f'batch_f_{_bk}'):
-                            _sel_factors.append(_bm)
-
-            if st.button(f'执行 ({len(_sel_factors)} 个)'):
-                import tempfile
-                _log_lines = []
-                for _meta in _sel_factors:
-                    _code = _get_func_code(_meta.name, 'factor', domain=_meta.domain)
-                    if not _code:
-                        _log_lines.append(f'[{_meta.name}] 无代码')
-                        continue
-                    _force = _mode == 'overwrite'
-                    _out, _err = _run_scratch(_code, force=_force)
-                    if _err:
-                        _log_lines.append(f'[{_meta.name}] ❌ {_err[:200]}')
-                    else:
-                        _log_lines.append(f'[{_meta.name}] ✅')
-                st.session_state.ai_log = '\n'.join(_log_lines)
-                st.rerun()
 
 mode = st.session_state.get('mode', '')
 q_lower = q.lower() if q else ''
@@ -377,7 +383,8 @@ if mode == 'list':
         if idx < len(_all_names):
             _prev = st.session_state.get('_sel', '')
             st.session_state._sel = _all_names[idx]
-            st.session_state.last_names = [(_all_names[idx], 'factor', all_show.iloc[idx].get('领域', '') if '领域' in all_show.columns else '')]
+            _a_row = all_show.iloc[idx]
+            st.session_state.last_names = [(_all_names[idx], 'factor', _a_row.get('领域', ''))]
             if _all_names[idx] != _prev:
                 st.session_state.should_scroll = True
 
@@ -391,7 +398,7 @@ def _save_ai():
             'id': p['id'],
             'name': p['data'].name, 'label': p['data'].label,
             'category': p['data'].category, 'domain': p['data'].domain,
-            'formula': p['data'].formula, 'code': p['data'].code,
+            'formula': p['data'].formula, 'dsl': p['data'].dsl, 'code': p['data'].code,
             'raw': p['data'].raw, 'logic_summary': p['data'].logic_summary,
             'tables_needed': p['data'].tables_needed,
             'fields_needed': [
@@ -459,8 +466,11 @@ def _refresh_data():
     if not os.path.exists(dd_path):
         return
     data_dict = json.load(open(dd_path))
+    # 同步 FIELD_MAP
+    from factor_generator.dsl_grammar import sync_field_map
+    sync_field_map(data_dict)
     valid = {}
-    for t in data_dict.get('tables', []):
+    for t in data_dict.get('tables', [],):
         valid[t['name']] = {f['name'] for f in t.get('fields', [])}
     for item in st.session_state.ai_pending:
         for r in item['data'].fields_needed:
@@ -482,6 +492,7 @@ def _load_ai():
                     name=item['name'], label=item.get('label', ''),
                     category=item.get('category', ''), domain=item.get('domain', ''),
                     formula=item.get('formula', ''),
+                    dsl=item.get('dsl', ''),
                     code=item.get('code', ''),
                     raw=item.get('raw', False),
                     logic_summary=item.get('logic_summary', ''),
@@ -497,6 +508,32 @@ def _load_ai():
     st.session_state.setdefault('ai_next_id', 0)
 
 _load_ai()
+
+_TOC_FILE = os.path.join(BASE, 'output', 'toc_items.json')
+
+
+def _save_toc():
+    items = st.session_state.get('_toc_items', [])
+    os.makedirs(os.path.dirname(_TOC_FILE), exist_ok=True)
+    json.dump(items, open(_TOC_FILE, 'w'), ensure_ascii=False, indent=2)
+
+
+def _load_toc():
+    if os.path.exists(_TOC_FILE):
+        try:
+            st.session_state['_toc_items'] = json.load(open(_TOC_FILE))
+        except Exception:
+            st.session_state['_toc_items'] = []
+    else:
+        st.session_state['_toc_items'] = []
+
+
+def _set_toc_items(items):
+    st.session_state['_toc_items'] = items
+    _save_toc()
+
+
+_load_toc()
 
 with st.expander('AI 因子生成'):
     st.session_state.setdefault('ai_log', '')
@@ -536,12 +573,16 @@ with st.expander('AI 因子生成'):
             if _r and _r.error:
                 st.error(_r.error)
             elif _r and _r.factors:
-                st.session_state['_toc_items'] = [
+                _existing = st.session_state.get('_toc_items', [])
+                _existing_names = {x['name'] for x in _existing}
+                _new_items = [
                     {'name': f.name, 'label': f.label, 'domain': f.domain,
-                     'logic_summary': f.logic_summary, 'selected': True}
-                    for f in _r.factors
+                     'logic_summary': f.logic_summary}
+                    for f in _r.factors if f.name not in _existing_names
                 ]
-                st.toast(f'提取 {len(_r.factors)} 个因子', icon='📋')
+                if _new_items:
+                    _set_toc_items(_existing + _new_items)
+                st.toast(f'提取 {len(_r.factors)} 个因子，新增 {len(_new_items)} 个', icon='📋')
                 if _r.usage:
                     u = _r.usage
                     st.session_state.ai_log = f'目录: {len(_r.factors)} 个因子，消耗 {u.get("total_tokens","-")} tokens'
@@ -597,10 +638,12 @@ if _pending:
     if _existing:
         st.warning(f'同名因子 {_fi.name} 已存在于 {_fi.domain} domain')
 
-    # 展示 SQL formula 或 raw 代码
-    if _fi.formula:
+    # 展示 DSL / formula / 代码
+    if _fi.dsl:
+        st.markdown(f'```\n{_fi.dsl}\n```')
+    elif _fi.formula:
         _formatted = sqlparse.format(_fi.formula, reindent=True, keyword_case='upper', indent_width=4)
-        st.code(_formatted, language='sql')
+        st.markdown(f'```sql\n{_formatted}\n```')
     elif _fi.code:
         st.code(_fi.code, language='python')
 
@@ -610,11 +653,37 @@ if _pending:
         tag = '✅' if r.status == 'available' else '❌'
         dest = f' → {r.table}.{r.field}' if r.table else ''
         st.markdown(f'{tag} {r.field}{dest}')
-    _btn_cols = st.columns([2, 3, 1])
+
+    # 编译后代码展示（raw 模式直接展示，DSL/formula 需点击编译后展示）
+    _compiled_key = f'ai_compiled_{_sel_id}'
+    _needs_compile = bool(_fi.dsl or _fi.formula)  # 有源码就需要编译
+    _already_compiled = st.session_state.get(_compiled_key, False)
+    # DSL 因子的 code 在生成时已预编译，但只显示到用户点击编译之后
+    if _fi.code and (not _fi.dsl or _already_compiled):
+        st.code(_fi.code, language='python')
+
+    _btn_cols = st.columns([1, 2, 3, 1])
+    # ── 编译（有源码时可用，纯展示型原始代码禁用）──
     with _btn_cols[0]:
+        if _needs_compile:
+            if st.button('编译', key=f'ai_compile_{_sel_id}'):
+                from factor_generator.compiler import compile_factor
+                try:
+                    _fi.code = compile_factor(_fi)
+                    st.session_state[_compiled_key] = True
+                    _save_ai()
+                except Exception as _e:
+                    st.error(f'编译失败: {_e}')
+                st.rerun()
+        else:
+            st.button('编译', disabled=True, key=f'ai_compile_{_sel_id}')
+    # ── 刷新数据 ──
+    with _btn_cols[1]:
         if st.button('刷新数据', help='重新扫描数据目录，更新字段可用性'):
             _refresh_data()
             st.rerun()
+    # ── 运行 + 选项（已编译 或 无需编译的原始代码）──
+    _can_run = _already_compiled or (_fi.code and not _needs_compile)
     _ai_force = False
     def _toggle_ai():
         if st.session_state.ai_force and st.session_state.ai_replace:
@@ -622,27 +691,27 @@ if _pending:
     def _toggle_ai2():
         if st.session_state.ai_replace and st.session_state.ai_force:
             st.session_state.ai_force = False
-    if _all_ok:
-        with _btn_cols[1]:
+    if _all_ok and _can_run:
+        with _btn_cols[2]:
             _c = st.columns([1, 1, 1])
             _ai_force = _c[0].checkbox('覆盖重算', key='ai_force', on_change=_toggle_ai)
             _ai_replace = _c[1].checkbox('覆盖写入', key='ai_replace', on_change=_toggle_ai2)
             if _c[2].button('运行', key='ai_run'):
-                # compiler 编译 formula → code
-                from factor_generator.compiler import compile_factor
-                _fi.code = compile_factor(_fi)
                 _stdout, _stderr = _run_scratch(_fi.code, force=_ai_force or _ai_replace)
                 st.session_state.log = _stdout
                 if _stderr:
                     st.session_state.log += '\n--- 错误 ---\n' + _stderr
                 if _ai_replace and _stdout and '完成' in _stdout:
                     _replace_factor(_fi.name, 'factor', _fi.code)
+                _FACTORS.clear()
+                load_factor_modules(['factors'])
                 st.session_state.last_names = [(_fi.name, 'factor', _fi.domain)]
                 st.session_state.should_scroll = True
                 st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
                 _save_ai()
                 st.rerun()
-    with _btn_cols[2]:
+    # ── 删除 ──
+    with _btn_cols[3]:
         if st.button('删除', key='ai_del'):
             st.session_state.ai_pending = [p for p in _pending if p['id'] != _sel_id]
             _save_ai()
@@ -769,11 +838,16 @@ if _pending:
     if _toc_items:
         with st.expander(f'因子目录 ({len(_toc_items)})', expanded=False):
             _toc_cols = st.columns([2, 2, 1, 1])
-            _toc_cols[0].checkbox('全选', key='toc_sel_all')
+            _toc_sel_all = _toc_cols[0].checkbox('全选', key='toc_sel_all')
+            # 全选状态变化时同步所有子选项
+            if _toc_sel_all != st.session_state.get('_prev_toc_sel_all', False):
+                for _item in _toc_items:
+                    st.session_state[f'toc_{_item["name"]}'] = _toc_sel_all
+            st.session_state['_prev_toc_sel_all'] = _toc_sel_all
             _toc_selected = []
             for _item in _toc_items:
                 _cols = st.columns([2, 2, 1, 1])
-                _checked = _cols[0].checkbox(_item['name'], value=st.session_state.get('toc_sel_all', False) or _item.get('selected', True), key=f'toc_{_item["name"]}')
+                _checked = _cols[0].checkbox(_item['name'], value=False, key=f'toc_{_item["name"]}')
                 _cols[1].write(_item['label'])
                 _cols[2].write(_item['domain'])
                 _cols[3].write(_item.get('logic_summary', '')[:30])
@@ -807,11 +881,18 @@ if _pending:
                         except Exception as _exc:
                             _msgs.append(f'批 {_i//_bs+1}: {" ".join(_names)} ❌ {_exc}')
                     st.session_state.ai_log = '\n'.join(_msgs)
-                    st.session_state.pop('_toc_items', None)
+                    # 仅移除已处理的项，未处理项保留
+                    _processed_names = {x['name'] for x in _toc_selected}
+                    _remaining = [x for x in st.session_state['_toc_items']
+                                  if x['name'] not in _processed_names]
+                    if _remaining:
+                        _set_toc_items(_remaining)
+                    else:
+                        _set_toc_items([])
                     st.rerun()
             _toc_cols = st.columns([1, 1])
             if _toc_cols[0].button('清空目录'):
-                st.session_state.pop('_toc_items', None)
+                _set_toc_items([])
                 st.rerun()
 
     # ── 数据需求汇总 ──
@@ -893,7 +974,7 @@ if st.session_state.get('pending'):
         # pipeline 跑成功后才执行代码替换
         if result.returncode == 0 and st.session_state.pop('replace_pending', False):
             items = _parse_decorators(code)
-            for _name, _kind in items:
+            for _name, _kind, _dom in items:
                 _replace_factor(_name, _kind, code)
 
     st.session_state.pending = False
@@ -909,15 +990,16 @@ st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 # ---- 展示选中因子的函数代码 + 删除 ----
 _last = st.session_state.get('last_names', [])
 if _last:
-    for _name, _kind in _last:
-        _meta_fc = get_factors().get(_name)
-        _found = _get_func_code(_name, _kind, domain=_meta_fc.domain if _meta_fc else None)
+    for _name, _kind, _dom in _last:
+        from factor_workbench.engine.registry import get_factor as _gf
+        _meta_fc = _gf(_name, _dom) if _dom else get_factors().get(_name)
+        _found = _get_func_code(_name, _kind, domain=_dom or (_meta_fc.domain if _meta_fc else None))
         if _found:
             _bar = st.columns([20, 1])
             with _bar[1]:
                 with st.popover('⋮'):
                     if st.button('删除', key=f'del_{_name}'):
-                        _delete_factor(_name)
+                        _delete_factor(_name, _dom)
                         st.rerun()
             st.code(_found, language='python')
 
@@ -928,15 +1010,15 @@ if names:
     # 标题由 layout 中 _title: 项控制
 
     # 指标行（从 CSV，按 domain 配置展示）
-    for name, _kind in names:
-        meta = get_factors().get(name)
-        if not meta:
-            continue
+    for name, _, _ in names:
+        pass
 # (metrics handled by layout above)
 
     # 指标展示表（按 layout 配置）
     if df is not None and not df.empty and names:
-        _tbl_meta = get_factors().get(names[0][0])
+        from factor_workbench.engine.registry import get_factor as _gf
+        _tbl_name, _tbl_kind, _tbl_dom = names[0]
+        _tbl_meta = _gf(_tbl_name, _tbl_dom) if _tbl_dom else get_factors().get(_tbl_name)
         if _tbl_meta:
             from config.domain_config import DOMAIN_CONFIG
             _tbl_dc = DOMAIN_CONFIG.get(_tbl_meta.domain, {})
@@ -948,8 +1030,9 @@ if names:
                     st.markdown(html, unsafe_allow_html=True)
 
     # 因子展示：按 layout 逐行渲染
-    for name, kind in names:
-        meta = get_factors().get(name)
+    for name, kind, dom in names:
+        from factor_workbench.engine.registry import get_factor as _gf
+        meta = _gf(name, dom) if dom else get_factors().get(name)
         if not meta:
             continue
         cat = meta.category

@@ -170,7 +170,7 @@ _METRIC_FMT = {
 
 def render_metrics_table(df, names, display_metrics):
     """展示所有周期的因子指标表（含 full + 各子区间）。返回 HTML 或 None。"""
-    _names_only = [n for n, _ in names]
+    _names_only = [n for n, *_ in names]
     fdf = df[df['factor'].isin(_names_only)]
     if fdf.empty:
         return None

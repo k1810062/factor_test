@@ -32,7 +32,7 @@ def _get_overwrite(cfg, factor_type, col):
     if ow:
         return ow
     if meta.get('mode') == 'overwrite':
-        return ['charts', 'ic', 'rr', 'sig']
+        return ['ic', 'decile', 'sig', 'rr', 'ts']
     return []
 
 
@@ -61,7 +61,8 @@ def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
     for group_name in groups:
         if group_name in global_ow:
             for col, _, cat in factors:
-                for chk in glob.glob(f'{base_dir}*/{cat}/{col}/{group_name}'):
+                _dir = _GROUP_DIRS.get(group_name, group_name)
+                for chk in glob.glob(f'{base_dir}*/{cat}/{col}/{_dir}'):
                     if os.path.isdir(chk):
                         shutil.rmtree(chk)
                         print(f'  [覆盖] {chk}')

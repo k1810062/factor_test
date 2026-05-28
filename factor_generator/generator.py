@@ -32,6 +32,7 @@ class FactorInfo:
     category: str
     domain: str
     formula: str = ''                               # SQL 查询
+    dsl: str = ''                                   # DSL 公式表达式
     code: str = ''                                  # @factor 代码（compiler 填充或 raw 模式直接用）
     raw: bool = False                               # 是否 raw 模式（完整代码，不走 compiler）
     logic_summary: str = ''
@@ -80,24 +81,12 @@ def generate_toc(
             _resolve_config_path(config_dir, 'api_config.json'))
         prompt_template = _load_text(
             os.path.join(config_dir, 'prompt_toc.txt'))
-        data_dict = _load_json(
-            _resolve_config_path(config_dir, 'data_dictionary.json'))
     except FileNotFoundError as e:
         return FactorOutput(factors=[], error=str(e))
     except json.JSONDecodeError as e:
         return FactorOutput(factors=[], error=f'配置文件格式错误: {e}')
 
-    data_dict_lines = ['# 可用数据表\n']
-    for t in data_dict.get('tables', []):
-        tname = t['name']
-        tdesc = t.get('description', '')
-        data_dict_lines.append(f'\n## {tname}（{tdesc}）')
-        for f in t.get('fields', []):
-            data_dict_lines.append(f'  {tname}.{f["name"]} — {f.get("description", "")}')
-    data_dict_str = '\n'.join(data_dict_lines)
-
     system_prompt = prompt_template.replace(
-        '{data_dict}', data_dict_str).replace(
         '{report_text}', report_text)
 
     try:
@@ -200,18 +189,8 @@ def generate(
     except json.JSONDecodeError as e:
         return FactorOutput(factors=[], error=f'配置文件格式错误: {e}')
 
-    # 2. 构建带数据字典的 system prompt
-    data_dict_lines = ['# 可用数据表\n']
-    for t in data_dict.get('tables', []):
-        tname = t['name']
-        tdesc = t.get('description', '')
-        data_dict_lines.append(f'\n## {tname}（{tdesc}）')
-        for f in t.get('fields', []):
-            data_dict_lines.append(f'  {tname}.{f["name"]} — {f.get("description", "")}')
-    data_dict_str = '\n'.join(data_dict_lines)
-
+    # 2. 构建 system prompt（不再注入数据字典）
     system_prompt = prompt_template.replace(
-        '{data_dict}', data_dict_str).replace(
         '{report_text}', report_text)
 
     try:
@@ -303,9 +282,17 @@ def _parse_llm_output(raw: dict, data_dict=None) -> list[FactorInfo]:
         # tables_needed（简单字符串列表）
         tables_raw = f.get('tables_needed', [])
 
-        # raw 模式：不走 compiler，直接使用 LLM 输出的完整代码
-        raw_mode = f.get('raw', False)
-        code_val = f.get('code', '') if raw_mode else ''
+        # DSL 模式：编译公式 → @factor 代码 + 字段校验
+        dsl_expr = f.get('dsl', '')
+        raw_mode = f.get('raw', False) or bool(dsl_expr)
+        if dsl_expr:
+            from .dsl_codegen import compile_dsl
+            code_val, fields_info = compile_dsl(
+                dsl_expr, f.get('name', ''), f.get('domain', 'stock'),
+                label=f.get('label', ''), data_dict=data_dict)
+            reqs = fields_info  # 编译器的字段校验覆盖 LLM 输出
+        else:
+            code_val = f.get('code', '') if raw_mode else ''
 
         result.append(FactorInfo(
             name=f['name'],
@@ -313,8 +300,9 @@ def _parse_llm_output(raw: dict, data_dict=None) -> list[FactorInfo]:
             category=f.get('category', ''),
             domain=f.get('domain', ''),
             formula=f.get('formula', ''),
+            dsl=f.get('dsl', ''),
             code=code_val,
-            raw=raw_mode,
+            raw=raw_mode or bool(f.get('dsl', '')),
             logic_summary=f.get('logic_summary', ''),
             tables_needed=list(tables_raw),
             fields_needed=reqs,

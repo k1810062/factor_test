@@ -1,5 +1,3 @@
-{data_dict}
-
 ## 任务
 
 根据用户提供的研报或想法，提取所有因子。输出 JSON 格式：
@@ -12,10 +10,8 @@
       "label": "因子中文名",
       "category": "分类（pv/fund/ind/monthly）",
       "domain": "domain（见下方规则）",
-      "formula": "完整的 SQL 查询，含 SELECT/FROM/WHERE",
-      "logic_summary": "因子逻辑简述",
-      "tables_needed": ["公式中用到的表名"],
-      "fields_needed": ["表名.字段名"]
+      "dsl": "纯表达式公式",
+      "logic_summary": "因子逻辑简述"
     }
   ]
 }
@@ -23,12 +19,14 @@
 
 ## domain 规则
 
-根据因子计算对象和频率判断：
+domain 由**数据本身的频率**决定，不是计算窗口长度（如"20日"等参数）：
 
-- 个股日频 → stock
+- DSL 公式默认操作日频数据 → stock（最常用）
 - 行业日频 → industry
-- 行业月度 → industry_monthly
-- 个股月度 → stock_monthly
+- 只有研报明确说"月度数据""月末截面"才用 stock_monthly / industry_monthly
+- 不确定时默认 stock
+
+即使公式中窗口参数为 20 日或 30 日，只要引用的是 stock_daily 的字段（CLOSE/VOLUME 等），domain 就为 stock。
 
 ## 命名规则
 
@@ -36,52 +34,28 @@
 - 研报无英文名则按含义简洁缩写
 - 不要重复加已有同义因子（通过 name 和 label 判断）
 
-## formula 规则
+## 输出规则
 
-- formula 必须是**完整可执行的 SQL 查询**
-- 以 SELECT（或 WITH）开头，完整的 SELECT/FROM/WHERE/GROUP BY/ORDER BY/WINDOW
-- 因子值列必须用 AS 命名为因子 name
-- 通用字段用小写：trade_date、stock_code、industry_code、ym
-- 多步运算可使用 CTE（WITH ... AS ...）
-- 多表 join 直接写 JOIN/LEFT JOIN
-
-✅ 正确示例：
-```sql
-SELECT stock_code, trade_date,
-       close / LAG(close, 10) OVER (PARTITION BY stock_code ORDER BY trade_date) - 1 AS mom_10d
-FROM stock_daily
-```
-
-```sql
-WITH ind_avg AS (
-  SELECT industry_code, trade_date, AVG(mv) AS avg_mv
-  FROM stock_daily GROUP BY industry_code, trade_date
-)
-SELECT s.stock_code, s.trade_date, s.mv / i.avg_mv - 1 AS relative_mv
-FROM stock_daily s JOIN ind_avg i USING (industry_code, trade_date)
-```
-
-## raw 模式
-
-如果因子逻辑无法用 SQL 表达（如自相关计算、滚动回归、迭代算法），使用 raw 模式输出完整 Python 代码：
+只输出 DSL 公式，不输出 SELECT/JOIN/FROM 等 SQL 关键字。
+字段名用大写: CLOSE, VOLUME, AMOUNT, HIGH, LOW, OPEN, MV, TURNOVER, PE, PB, ROE
+可用算子（54 个）：ABS, LOG, SQRT, SIGN, POWER, SIGNEDPOWER, MAX, MIN, IF, DELAY, DELTA, MA, AVG, ADV, TS_MEAN, MEAN, STDDEV, SUM, TS_MAX, HHV, TS_MIN, LLV, RETURNS, CORRELATION, COVARIANCE, COUNT, EVERY, CROSS, RANK, ZSCORE, SCALE, EMA, SMA, WMA, TS_RANK, DECAY_LINEAR, SLOPE, FORCAST, BARSLAST, TS_ARGMAX, TS_ARGMIN, HHVBARS, LLVBARS, AVEDEV, EXIST, SUMIF, BARSLASTCOUNT, BARSSINCEN, LAST, VALUEWHEN, CONST, LONGCROSS, PRODUCT
 
 ```json
 {
-  "name": "因子名",
-  "formula": null,
-  "raw": true,
-  "code": "@factor(name='因子名', category='分类', label='标签', domain='domain')\\ndef 因子名(api):\\n    ...",
-  "tables_needed": [...],
-  "fields_needed": [...]
+  "name": "mom_20d",
+  "label": "20日动量",
+  "category": "pv",
+  "domain": "stock",
+  "dsl": "RANK(CLOSE / DELAY(CLOSE, 20) - 1)",
+  "logic_summary": "过去20日累计收益的横截面排名"
 }
 ```
 
 ## 数据字段清单
 
-- tables_needed 列出公式中出现的所有表名
-- fields_needed 列出公式中使用的所有字段，格式为 "表名.字段名"
-- 字段名必须使用数据字典中的真实名称
-- 数据字典中没有的字段合理推测并列出；后续会确认可用性
+- 字段名使用大写标准名（如 CLOSE、VOLUME）
+- 禁止编造缩写或自定义字段名
+- 不存在字段会由编译器标记异常，后续将反馈错误
 
 ---
 {report_text}

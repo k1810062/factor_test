@@ -88,9 +88,9 @@ def main():
     for k in ('tables', 'output_paths', 'key_cols', 'analysis_dir'):
         if k in old_cfg:
             cfg[k] = old_cfg[k]
-    cfg['analysis'] = ['charts', 'ic', 'rr', 'sig']
+    cfg['analysis'] = ['charts', 'ic', 'rr', 'sig', 'decile', 'ts']
     if '--force' in sys.argv:
-        cfg['analysis_overwrite'] = ['charts', 'ic', 'rr', 'sig']
+        cfg['analysis_overwrite'] = ['ic', 'decile', 'sig', 'rr', 'ts']
         print('  → 覆盖模式：因子值 + 分析将重算')
     cfg['sub_period'] = {'from_file': 'data/market_periods.json', 'groups': ['bull', 'bear', 'consolidate']}
     json.dump(cfg, open(CONFIG_PATH, 'w'), ensure_ascii=False, indent=2)
