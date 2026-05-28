@@ -530,6 +530,7 @@ _load_toc()
 _ai_tab1, _ai_tab2, _ai_tab3 = st.tabs(['🤖 LLM 生成', '✏️ DSL 输入', '📝 完整函数'])
 
 with _ai_tab1:
+    st.markdown('**研报文本生成因子**')
     st.session_state.setdefault('ai_log', '')
     _c_log = st.columns([3, 2])
     with _c_log[0]:
@@ -670,6 +671,7 @@ with _ai_tab2:
         st.text_area('运行日志', _dsl_log, height=400, label_visibility='collapsed', disabled=True, key='dsl_log')
 
 with _ai_tab3:
+    st.markdown('**Python 函数代码编译运行**')
     _col_l, _col_r = st.columns([3, 2])
     with _col_l:
         st.caption('代码')
