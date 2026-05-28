@@ -1021,7 +1021,7 @@ if names:
         _tbl_meta = _gf(_tbl_name, _tbl_dom) if _tbl_dom else get_factors().get(_tbl_name)
         if _tbl_meta:
             from config.domain_config import DOMAIN_CONFIG
-            _tbl_dc = DOMAIN_CONFIG.get(_tbl_meta.domain, {})
+            _tbl_dc = DOMAIN_CONFIG.get(_tbl_meta.domain, {}).get(_tbl_meta.freq, {})
             _tbl_layout = _tbl_dc.get('display', {}).get('layout', [])
             if any('_table' in row for row in _tbl_layout):
                 _tbl_metrics = _tbl_dc.get('display', {}).get('metrics', [])
@@ -1041,7 +1041,7 @@ if names:
         _rebuild = [df is None or df[df['factor'] == name].empty]
 
         from config.domain_config import DOMAIN_CONFIG
-        _dc = DOMAIN_CONFIG.get(domain, {})
+        _dc = DOMAIN_CONFIG.get(domain, {}).get(meta.freq, {})
         _layout = _dc.get('display', {}).get('layout', [])
 
         for row in _layout:

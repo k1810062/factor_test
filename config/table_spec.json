@@ -1,0 +1,32 @@
+[
+  {
+    "name": "stock_daily",
+    "description": "个股日行情。行情+资金流+基本面+行业归属的日频宽表",
+    "key_cols": ["stock_code", "trade_date"],
+    "status": "available"
+  },
+  {
+    "name": "industry_daily",
+    "description": "行业指数日行情",
+    "key_cols": ["industry_code", "trade_date"],
+    "status": "available"
+  },
+  {
+    "name": "etf_daily",
+    "description": "ETF日行情，含资金流",
+    "key_cols": ["etf_code", "trade_date"],
+    "status": "available"
+  },
+  {
+    "name": "index_daily",
+    "description": "大盘指数日行情。算 Beta 等需要大盘基准",
+    "key_cols": ["index_code", "trade_date"],
+    "status": "empty"
+  },
+  {
+    "name": "stock_financial",
+    "description": "个股财务数据，按报告期（非日频）",
+    "key_cols": ["stock_code", "report_date"],
+    "status": "empty"
+  }
+]

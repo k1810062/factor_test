@@ -63,7 +63,7 @@ def main():
         domain = _get_kw(dec, 'domain')
         if not name or not domain:
             continue
-        factors.append((name, _get_kw(dec, 'category'), _get_kw(dec, 'label'), domain))
+        _freq = _get_kw(dec, 'freq') or 'daily'
 
     if not factors:
         print('错误：未识别到 @factor 装饰器')
@@ -76,8 +76,8 @@ def main():
     fc = {}
     ow = 'overwrite' if '--force' in sys.argv else 'skip'
     print(f'  → 模式: {ow}{" (--force)" if "--force" in sys.argv else ""}')
-    for name, cat, label, domain in factors:
-        fc.setdefault(domain, {})[name] = {'cat': cat, 'label': label, 'mode': ow}
+    for name, cat, label, domain, freq in factors:
+        fc.setdefault(domain, {})[name] = {'cat': cat, 'label': label, 'mode': ow, 'freq': freq}
     json.dump(fc, open(fc_path, 'w'), ensure_ascii=False, indent=2)
     if fc:
         print(f'  → factors_config.json（{sum(len(v) for v in fc.values())} 个因子）')
@@ -112,7 +112,7 @@ def main():
 
     # pipeline 成功后写入因子文件
     if success:
-        for name, cat, label, domain in factors:
+        for name, cat, label, domain, _freq in factors:
             target = _target(domain)
             if not os.path.exists(target):
                 open(target, 'w').write(f'# {domain} 因子\n')

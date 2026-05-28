@@ -14,8 +14,6 @@ DOMAINS = {
                          'analysis_dir': 'output/analysis/stock'},
     'industry':         {'key': ['industry_code', 'trade_date'], 'path': 'output/factor_library/industry_factors.parquet',
                          'analysis_dir': 'output/analysis/industry'},
-    'industry_monthly': {'key': ['industry_code', 'ym'],        'path': 'output/factor_library/industry_monthly_factors.parquet',
-                         'analysis_dir': 'output/analysis/industry_monthly'},
 }
 
 def _scan_parquets(dirs):

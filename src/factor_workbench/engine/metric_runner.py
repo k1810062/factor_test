@@ -36,8 +36,14 @@ def _get_overwrite(cfg, factor_type, col):
     return []
 
 
+def _get_freq_cfg(domain_cfg, freq):
+    fc = domain_cfg.get(freq) if domain_cfg else None
+    if fc is None:
+        fc = domain_cfg.get('daily', {})
+    return fc
+
+
 def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
-    """按 domain_config 运行分析组。"""
     domain_cfg = DOMAIN_CONFIG.get(factor_type)
     if not domain_cfg:
         print(f'  [{factor_type}] 无 domain 配置，跳过分析')
@@ -46,39 +52,44 @@ def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
         base_dir = cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
 
     src = _load_factors(factor_type)
-    factors = [(k, v['label'], v['cat']) for k, v in src.items()]
+    factors = [(k, v['label'], v['cat'], v.get('freq', 'daily')) for k, v in src.items()]
     if not factors:
         print(f'  [{factor_type}] 无因子，跳过')
         return
 
-    groups = domain_cfg.get('analysis_groups', [])
-    if not groups:
-        print(f'  [{factor_type}] 无分析组配置')
-        return
+    freq_groups = {}
+    for _, _, _, freq in factors:
+        fc = _get_freq_cfg(domain_cfg, freq)
+        gs = tuple(fc.get('analysis_groups', []))
+        freq_groups[freq] = gs
+    all_groups = set()
+    for gs in freq_groups.values():
+        all_groups.update(gs)
 
-    # 全局覆盖
     global_ow = cfg.get('analysis_overwrite', [])
-    for group_name in groups:
+    for group_name in all_groups:
         if group_name in global_ow:
-            for col, _, cat in factors:
+            for col, _, cat, _ in factors:
                 _dir = _GROUP_DIRS.get(group_name, group_name)
                 for chk in glob.glob(f'{base_dir}*/{cat}/{col}/{_dir}'):
                     if os.path.isdir(chk):
                         shutil.rmtree(chk)
                         print(f'  [覆盖] {chk}')
 
-    # 逐组运行
-    print(f'开始分析 {factor_type}，共 {len(factors)} 个因子，组: {groups}')
-    for group_name in groups:
+    print(f'开始分析 {factor_type}，共 {len(factors)} 个因子')
+    for group_name in all_groups:
         group_fn = ANALYSIS_GROUPS.get(group_name)
         if not group_fn:
             print(f'  [{factor_type}] 未知分析组: {group_name}')
             continue
-        group_cfg = domain_cfg.get(group_name, {})
-        for col, cn, cat in factors:
+        for col, cn, cat, freq in factors:
+            fc = _get_freq_cfg(domain_cfg, freq)
+            groups = fc.get('analysis_groups', [])
+            if group_name not in groups:
+                continue
+            group_cfg = fc.get(group_name, {})
             factor_dir = f'{base_dir}/{cat}/{col}'
             chk = f'{factor_dir}/{_GROUP_DIRS.get(group_name, group_name)}'
-            # 检查是否需要跳过（已存在且非 overwrite）
             if group_name in _get_overwrite(cfg, factor_type, col):
                 if os.path.exists(chk):
                     shutil.rmtree(chk)
@@ -136,12 +147,16 @@ def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
         sub_dir = f'{base_dir}_{suffix}'
         os.makedirs(sub_dir, exist_ok=True)
         print(f'\n=== 子区间分析：{suffix} ===')
-        for group_name in groups:
+        for group_name in all_groups:
             group_fn = ANALYSIS_GROUPS.get(group_name)
             if not group_fn:
                 continue
-            group_cfg = domain_cfg.get(group_name, {})
-            for col, cn, cat in factors:
+            for col, cn, cat, freq in factors:
+                fc = _get_freq_cfg(domain_cfg, freq)
+                groups = fc.get('analysis_groups', [])
+                if group_name not in groups:
+                    continue
+                group_cfg = fc.get(group_name, {})
                 factor_dir = f'{sub_dir}/{cat}/{col}'
                 chk = f'{factor_dir}/{_GROUP_DIRS.get(group_name, group_name)}'
                 if group_name in _get_overwrite(cfg, factor_type, col):
@@ -154,4 +169,4 @@ def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
                 except Exception as e:
                     print(f'  [{col}] {group_name} 子区间分析失败: {e}')
 
-    print(f'\n{domain_cfg.get("freq", factor_type)} 域分析完成！结果保存在 {base_dir}/')
+    print(f'\n{domain_cfg["key_col"]} 域分析完成！结果保存在 {base_dir}/')

@@ -21,6 +21,7 @@ class FactorMeta:
     category: str
     label: str
     domain: str
+    freq: str  # 'daily' or 'monthly'
 
 
 @dataclass
@@ -34,11 +35,11 @@ _FACTORS: dict[str, FactorMeta] = {}
 _METRICS: dict[str, MetricMeta] = {}
 
 
-def factor(name, category, label, domain='stock'):
+def factor(name, category, label, domain='stock', freq='daily'):
     """注册一个因子（计算+分析）。"""
     def wrapper(fn):
         _FACTORS[f'{domain}:{name}'] = FactorMeta(
-            name=name, fn=fn, category=category, label=label, domain=domain,
+            name=name, fn=fn, category=category, label=label, domain=domain, freq=freq,
         )
         return fn
     return wrapper

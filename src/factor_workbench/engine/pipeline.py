@@ -173,9 +173,9 @@ class Pipeline:
 
     def _run_analysis(self):
         """运行评价指标（按 domain_config 组调度）。"""
-        fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'monthly']
+        fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'stock']
         for factor_type in fc_domains:
-            date_col = 'ym' if 'monthly' in str(factor_type) else 'trade_date'
+            date_col = 'trade_date'
 
             # 注册因子库表（刚算完的文件可能还没注册）
             for domain, p in self.cfg.get('output_paths', {}).items():
@@ -189,7 +189,13 @@ class Pipeline:
             if dc and not self.cfg.get('analysis_overwrite', []):
                 _fc = json.load(open('config/factors_config.json')).get(factor_type, {})
                 _adir = self.cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
-                groups = dc.get('analysis_groups', [])
+                # all freq
+                all_groups = set()
+                for _fc_meta in _fc.values():
+                    _fc_freq = _fc_meta.get('freq', 'daily')
+                    _fc_cfg = dc.get(_fc_freq, {})
+                    all_groups.update(_fc_cfg.get('analysis_groups', []))
+                groups = all_groups
                 _all_done = groups and all(
                     os.path.isdir(f'{_adir}/{meta.get("cat", factor_type)}/{name}/{g}')
                     for g in groups
@@ -221,19 +227,6 @@ class Pipeline:
             g = df.groupby('industry_code')['idx_close']
             for h in (1, 5, 10, 22):
                 df[f'ret_T{h}'] = g.transform(lambda x: x.shift(-h) / x - 1)
-            return df
-        elif 'monthly' in str(factor_type):
-            df = self.api.table('industry_monthly_factors', columns=None)
-            if 'ym' not in df.columns:
-                return None
-            idx = self.api.table('industry_daily', columns=['industry_code', 'trade_date', 'close'])
-            idx = idx.rename(columns={'close': 'idx_close'})
-            idx = idx.sort_values(['industry_code', 'trade_date']).reset_index(drop=True)
-            idx['ym'] = idx['trade_date'].str[:6]
-            monthly = idx.groupby(['industry_code', 'ym']).tail(1).copy()
-            monthly['ret_T1'] = monthly.groupby('industry_code')['idx_close'].transform(
-                lambda x: x.shift(-1) / x - 1)
-            df = df.merge(monthly[['industry_code', 'ym', 'ret_T1']], on=['industry_code', 'ym'], how='left')
             return df
         elif factor_type == 'stock':
             if 'stock_factors' not in self.cfg.get('tables', {}):

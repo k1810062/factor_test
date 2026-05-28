@@ -166,7 +166,7 @@ def _filter(s, n):
 '''
 
     return (
-        f"@factor(name='{factor_name}', category='pv', label='{_label}', domain='{domain}')\n"
+        f"@factor(name='{factor_name}', category='pv', label='{_label}', domain='{domain}', freq='daily')\n"
         f"def {factor_name}(api):\n"
         f"    import pandas as pd, numpy as np\n"
         f"    df = api.query('''SELECT {key_sql}, {field_sql} FROM {tbl}''')\n"
