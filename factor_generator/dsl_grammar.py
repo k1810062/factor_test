@@ -74,6 +74,8 @@ _reg(OpDef('LONGCROSS', [('a', 'col'), ('b', 'col'), ('n', 'int')], description=
 _reg(OpDef('PRODUCT', [('series', 'col'), ('n', 'int')], description='滚动乘积'))
 _reg(OpDef('FILTER', [('cond', 'col'), ('n', 'int')], description='条件触发后 n 天置零'))
 _reg(OpDef('SIGNEDPOWER', [('series', 'col'), ('n', 'float')], description='带符号幂运算'))
+_reg(OpDef('DECAY_EXP', [('series', 'col'), ('alpha', 'float')], description='指数衰减加权平均'))
+_reg(OpDef('TS_REGRESSION', [('y', 'col'), ('x', 'col'), ('n', 'int')], description='滚动线性回归残差'))
 
 # ── 字段映射 ─────────────────────────────────────
 

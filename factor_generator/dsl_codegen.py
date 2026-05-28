@@ -92,6 +92,8 @@ def _pandas_op(name: str, args: list[str], gk: str, dk: str) -> str:
     if name == 'LONGCROSS': return _ts(args[0], f"x.rolling({args[2]}+1).apply(lambda y: float(np.all(y[::-1][1:{args[2]}+1] < {args[1]}) and y.iloc[-1] > {args[1]}))")
     if name == 'PRODUCT': return _ts(args[0], f"x.rolling({args[1]}).apply(np.prod)")
     if name == 'FILTER': return _ts(args[0], f"_filter(x, {args[1]})")
+    if name == 'DECAY_EXP': return _ts(args[0], f"x.ewm(alpha={args[1]}, adjust=False).mean()")
+    if name == 'TS_REGRESSION': return _ts(args[0], f"x.rolling({args[2]}).apply(lambda y: np.polyfit(range(len(y)), y, 1)[1] if len(y) == {args[2]} else np.nan)")
 
     raise ValueError(f'no pandas implementation for {name}')
 
