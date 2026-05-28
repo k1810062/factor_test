@@ -243,51 +243,44 @@ _disp_labels = {
 }
 disp_cols = [c for c in _disp_labels if c in all_factors.columns]
 
-# domain 筛选 + 批量运行
-_domains = ['全部'] + sorted(all_factors['domain'].unique()) if 'domain' in all_factors.columns else ['全部']
-_ds_cols = st.columns([3, 1])
+# domain 入口选择
+_cur_dom = st.session_state.get('_domain', 'stock')
+_domain_choices = ['stock', 'industry']
+_dc = st.columns([1, 1, 4])
+for i, d in enumerate(_domain_choices):
+    with _dc[i]:
+        if st.button(f'📊 {d.upper()}', use_container_width=True,
+                     type='primary' if _cur_dom == d else 'secondary'):
+            st.session_state._domain = d
+            st.session_state.ai_pending_sel = 0
+            st.rerun()
+_selected = st.session_state.get('_domain', 'stock')
+_domain_filter = all_factors['domain'] == _selected if 'domain' in all_factors.columns else pd.Series([True] * len(all_factors))
+
+# domain 标题
+_domain_titles = {'stock': '📈 个股因子', 'industry': '🏭 行业因子'}
+st.subheader(_domain_titles.get(_selected, _selected.upper()))
+
+# 批量运行（仅当前 domain）
+_ds_cols = st.columns([1, 1])
 with _ds_cols[0]:
-    _selected = st.selectbox('领域', _domains, label_visibility='collapsed')
-with _ds_cols[1]:
     with st.popover('批量运行'):
         _mode = st.radio('模式', ['skip', 'overwrite'], horizontal=True, key='batch_mode')
-
-        # 按 domain 分组
-        _dom_groups = {}
-        _all_keys = []
-        for _bk, _bm in sorted(_FACTORS.items()):
-            _dom_groups.setdefault(_bm.domain, []).append((_bk, _bm))
-            _all_keys.append(f'batch_f_{_bk}')
-
-        # 全选（全部 domain）
-        _gk = 'batch_all'
+        _dom_factors = [(k, v) for k, v in _FACTORS.items() if _selected in k]
+        _all_keys = [f'batch_dom_{k.replace(":", "_")}' for k, _ in _dom_factors]
+        _gk = f'batch_all_{_selected}'
         if '_prev_' + _gk not in st.session_state:
             st.session_state['_prev_' + _gk] = False
-        _g_cur = st.checkbox('全选所有领域', key=_gk)
+        _g_cur = st.checkbox('全选', key=_gk)
         _g_prev = st.session_state['_prev_' + _gk]
         if _g_cur != _g_prev:
             for _t in _all_keys:
                 st.session_state[_t] = _g_cur
         st.session_state['_prev_' + _gk] = _g_cur
-
-        # 逐 domain 渲染
         _sel_factors = []
-        for _dom, _items in sorted(_dom_groups.items()):
-            _dom_targets = [f'batch_f_{_bk}' for _bk, _bm in _items]
-            with st.expander(f'{_dom} ({len(_items)})', expanded=False):
-                _dk = f'batch_dom_{_dom}'
-                if '_prev_' + _dk not in st.session_state:
-                    st.session_state['_prev_' + _dk] = False
-                _d_cur = st.checkbox(f'全选 {_dom}', key=_dk)
-                _d_prev = st.session_state['_prev_' + _dk]
-                if _d_cur != _d_prev:
-                    for _t in _dom_targets:
-                        st.session_state[_t] = _d_cur
-                st.session_state['_prev_' + _dk] = _d_cur
-                for _bk, _bm in _items:
-                    if st.checkbox(f'{_bm.name} ({_bm.label})', key=f'batch_f_{_bk}'):
-                        _sel_factors.append(_bm)
-
+        for (_bk, _bm), _k in zip(_dom_factors, _all_keys):
+            if st.checkbox(f'{_bm.name} ({_bm.label})', key=_k):
+                _sel_factors.append(_bm)
         if st.button(f'执行 ({len(_sel_factors)} 个)'):
             import tempfile
             _log_lines = []
@@ -304,8 +297,6 @@ with _ds_cols[1]:
                     _log_lines.append(f'[{_meta.name}] ✅')
             st.session_state.ai_log = '\n'.join(_log_lines)
             st.rerun()
-
-_domain_filter = all_factors['domain'] == _selected if _selected != '全部' else pd.Series([True] * len(all_factors))
 
 _c1, _c2 = st.columns([4, 1])
 with _c1:
@@ -535,16 +526,21 @@ def _set_toc_items(items):
 
 _load_toc()
 
-with st.expander('AI 因子生成'):
+# ── 功能 Tab：LLM 生成 vs DSL 输入 vs 完整函数 ──
+_ai_tab1, _ai_tab2, _ai_tab3 = st.tabs(['🤖 LLM 生成', '✏️ DSL 输入', '📝 完整函数'])
+
+with _ai_tab1:
     st.session_state.setdefault('ai_log', '')
     _c_log = st.columns([3, 2])
     with _c_log[0]:
+        st.caption('研报内容')
         report_text = st.text_area('研报内容', height=400, label_visibility='collapsed',
                                     placeholder='粘贴研报或因子想法...')
         _has_report = bool(report_text.strip())
         _gen_clicked = st.button('生成', key='ai_generate', disabled=not _has_report)
         _toc_clicked = st.button('生成目录', key='ai_toc', disabled=not _has_report)
     with _c_log[1]:
+        st.caption('日志')
         _ai_log = st.session_state.get('ai_log', '')
         st.text_area('日志', _ai_log, height=400, disabled=True, label_visibility='collapsed')
     st.markdown('<style>div:has(> textarea[aria-label="日志"]) textarea{font-size:13px!important;white-space:pre-wrap!important;word-break:break-all!important}</style>', unsafe_allow_html=True)
@@ -622,14 +618,96 @@ with st.expander('AI 因子生成'):
                     st.toast(f'生成 {len(_r.factors)} 个因子，消耗 {u.get("total_tokens","-")} tokens', icon='🤖')
         st.rerun()
 
+with _ai_tab2:
+    st.markdown('**直接输入 DSL 公式**')
+    _dsl_l, _dsl_r = st.columns([3, 2])
+    with _dsl_l:
+        st.caption('DSL 公式')
+        _manual_input = st.text_area('DSL 公式', height=400, label_visibility='collapsed',
+                                      placeholder='例如: RANK(CLOSE / DELAY(CLOSE, 20) - 1)')
+        _cc = st.columns([1, 1, 1, 1])
+        _manual_code = st.session_state.get('_manual_code', '')
+        _manual_name = _cc[0].text_input('因子名称', placeholder='mom_20d', key='m_name')
+        _manual_label = _cc[1].text_input('标签', placeholder='20日动量排名', key='m_label')
+        _manual_compile = _cc[2].button('编译', key='manual_compile', use_container_width=True)
+        _manual_run = _cc[3].button('运行', key='manual_dsl_run', use_container_width=True,
+                                     disabled=not bool(_manual_code))
+        if _manual_compile:
+            if _manual_input.strip() and _manual_name.strip():
+                from factor_generator.dsl_codegen import compile_dsl
+                from factor_generator.generator import FactorInfo
+                try:
+                    _code, _info = compile_dsl(
+                        _manual_input.strip(), _manual_name.strip(),
+                        _selected, label=_manual_label.strip() or _manual_name.strip())
+                    st.session_state._manual_code = _code
+                    _manual_code = _code
+                    _id = st.session_state.ai_next_id
+                    st.session_state.ai_next_id += 1
+                    _fi = FactorInfo(
+                        name=_manual_name.strip(),
+                        label=_manual_label.strip() or _manual_name.strip(),
+                        category='pv', domain=_selected,
+                        dsl=_manual_input.strip(), code=_code,
+                        fields_needed=_info,
+                    )
+                    with st.expander('完整函数代码', expanded=False):
+                        st.code(_fi.code, language='python')
+                    st.session_state.ai_pending.insert(0, {'id': _id, 'data': _fi})
+                    _save_ai()
+                    st.toast('已加入待处理列表', icon='✅')
+                except Exception as _e:
+                    st.error(f'编译失败: {_e}')
+        if _manual_run and _manual_code:
+            _out, _err = _run_scratch(_manual_code, force=True)
+            st.session_state._dsl_log = _out
+            if _err:
+                st.session_state._dsl_log += '\n--- 错误 ---\n' + _err
+            st.rerun()
+    with _dsl_r:
+        st.caption('运行日志')
+        _dsl_log = st.session_state.get('_dsl_log', '')
+        st.text_area('运行日志', _dsl_log, height=400, label_visibility='collapsed', disabled=True, key='dsl_log')
+
+with _ai_tab3:
+    _col_l, _col_r = st.columns([3, 2])
+    with _col_l:
+        st.caption('代码')
+        _result = code_editor(TEMPLATE, lang='python', height='420px', key='factor_code_v1',
+                              response_mode=['blur', 'debounce'],
+                              options={'showInvisibles': False, 'minimap': {'enabled': False}})
+        code = _result.get('text') or TEMPLATE
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            force = st.checkbox('覆盖重算', key='editor_force', on_change=lambda: (
+                st.session_state.update(editor_replace=False) if st.session_state.editor_force and st.session_state.editor_replace else None))
+        with c2:
+            replace = st.checkbox('覆盖写入', key='editor_replace', on_change=lambda: (
+                st.session_state.update(editor_force=False) if st.session_state.editor_replace and st.session_state.editor_force else None))
+        with c3:
+            run = st.button('运行', width='stretch')
+    with _col_r:
+        st.caption('运行日志')
+        log_text = st.session_state.get('_tab3_log', '')
+        st.text_area('运行日志', log_text, height=420, label_visibility='collapsed', disabled=True, key='tab3_log')
+
+    # ---- 运行流程 ----
+    if run:
+        st.session_state.replace_pending = replace
+        st.session_state._tab3_log = ''
+        st.session_state.last_names = []
+        st.session_state.pending = True
+        st.session_state.search_key = str(hash(str(time.time())))
+        st.rerun()
+
 if st.session_state.get('ai_gen_count', 0):
     st.caption(f'生成运行: {st.session_state.ai_gen_count} 次')
-_pending = st.session_state.ai_pending
+_pending = [p for p in st.session_state.ai_pending if p['data'].domain == _selected]
 if _pending:
     st.markdown(f'**待处理因子 ({len(_pending)})**')
     _id2label = {p['id']: f"[{p['data'].name}] {p['data'].label}" for p in _pending}
     _sel_id = st.selectbox('选择因子', list(_id2label.keys()),
-                            format_func=lambda i: _id2label[i], key='ai_pending_sel')
+                            format_func=lambda i: _id2label[i], key=f'ai_pending_sel_{_selected}')
     _item = next(p for p in _pending if p['id'] == _sel_id)
     _fi = _item['data']
 
@@ -698,9 +776,9 @@ if _pending:
             _ai_replace = _c[1].checkbox('覆盖写入', key='ai_replace', on_change=_toggle_ai2)
             if _c[2].button('运行', key='ai_run'):
                 _stdout, _stderr = _run_scratch(_fi.code, force=_ai_force or _ai_replace)
-                st.session_state.log = _stdout
+                st.session_state._pending_run_log = _stdout
                 if _stderr:
-                    st.session_state.log += '\n--- 错误 ---\n' + _stderr
+                    st.session_state._pending_run_log += '\n--- 错误 ---\n' + _stderr
                 if _ai_replace and _stdout and '完成' in _stdout:
                     _replace_factor(_fi.name, 'factor', _fi.code)
                 _FACTORS.clear()
@@ -916,75 +994,6 @@ if _pending:
             if _total_missing:
                 st.caption(f'共 {_total_missing} 个字段缺失，补全数据后点"刷新数据"更新状态')
 
-col_left, col_right = st.columns([3, 2])
-
-with col_left:
-    st.caption('代码')
-    _result = code_editor(TEMPLATE, lang='python', height='420px', key='factor_code_v1',
-                          response_mode=['blur', 'debounce'],
-                          options={'showInvisibles': False, 'minimap': {'enabled': False}})
-    code = _result.get('text') or TEMPLATE
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        force = st.checkbox('覆盖重算', key='editor_force', on_change=lambda: (
-            st.session_state.update(editor_replace=False) if st.session_state.editor_force and st.session_state.editor_replace else None))
-    with c2:
-        replace = st.checkbox('覆盖写入', key='editor_replace', on_change=lambda: (
-            st.session_state.update(editor_force=False) if st.session_state.editor_replace and st.session_state.editor_force else None))
-    with c3:
-        run = st.button('运行', width='stretch')
-
-with col_right:
-    st.caption('运行日志')
-    log_text = st.session_state.get('log', '')
-    st.text_area('运行日志', log_text, height=420, label_visibility='collapsed', disabled=True)
-
-# ---- 运行流程 ----
-if run:
-    st.session_state.replace_pending = replace
-    st.session_state.log = ''
-    st.session_state.last_names = []
-    st.session_state.pending = True
-    st.session_state.search_key = str(hash(str(time.time())))
-    st.rerun()
-
-if st.session_state.get('pending'):
-    # 语法检查
-    try:
-        ast.parse(code)
-    except SyntaxError as e:
-        st.session_state.log = f'语法错误: 第{e.lineno}行 {e.msg}'
-        st.session_state.pending = False
-        st.rerun()
-
-    with st.spinner('计算中...'):
-        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
-        tmp.write(code)
-        tmp_path = tmp.name
-        tmp.close()
-        env = os.environ.copy()
-        env['PYTHONPATH'] = f'{os.path.join(BASE, "src")}:{env.get("PYTHONPATH", "")}'
-        cmd = [sys.executable, '-m', 'factor_workbench.scratch']
-        if force or replace:
-            cmd.append('--force')
-        cmd.append(tmp_path)
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE, env=env)
-        os.unlink(tmp_path)
-
-        # pipeline 跑成功后才执行代码替换
-        if result.returncode == 0 and st.session_state.pop('replace_pending', False):
-            items = _parse_decorators(code)
-            for _name, _kind, _dom in items:
-                _replace_factor(_name, _kind, code)
-
-    st.session_state.pending = False
-    st.session_state.log = result.stdout
-    if result.stderr:
-        st.session_state.log += '\n--- 错误 ---\n' + result.stderr
-    st.session_state.last_names = _parse_decorators(code)
-    st.session_state.should_scroll = True
-    st.rerun()
-
 st.markdown('<div id="factor-metrics"></div>', unsafe_allow_html=True)
 
 # ---- 展示选中因子的函数代码 + 删除 ----
@@ -1105,9 +1114,9 @@ if names:
             if st.button('补全数据', key=f'rebuild_{name}'):
                 with st.spinner('计算中...'):
                     stdout, stderr = _run_scratch(func_code, force=True)
-                    st.session_state.log = stdout
+                    st.session_state._tab3_log = stdout
                     if stderr:
-                        st.session_state.log += '\n--- 错误 ---\n' + stderr
+                        st.session_state._tab3_log += '\n--- 错误 ---\n' + stderr
                     st.rerun()
 
     # scroll
