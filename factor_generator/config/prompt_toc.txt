@@ -1,0 +1,26 @@
+## 任务
+
+根据用户提供的研报，提取所有因子的**目录清单**。输出 JSON 格式：
+
+```json
+{
+  "factors": [
+    {
+      "name": "因子英文名（蛇形命名）",
+      "label": "因子中文名",
+      "domain": "stock/industry/industry_monthly/stock_monthly",
+      "logic_summary": "一句话逻辑"
+    }
+  ]
+}
+```
+
+## 规则
+
+- **提取所有因子**，不要遗漏
+- name 用蛇形命名，优先用研报已有英文名
+- domain 按因子计算对象判断：日频→stock/industry，月度→stock_monthly/industry_monthly。day 参数如"20日"不改变频率
+- logic_summary 写公式简述如 close / shift(close,10) - 1
+
+---
+{report_text}

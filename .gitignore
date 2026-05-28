@@ -11,7 +11,10 @@ factors/
 features/
 
 # auto-generated config
-config/
+config/config.json
+config/factors_config.json
+factor_generator/config/api_config.json
+factor_generator/config/data_dictionary.json
 
 # 启动脚本
 启动.command
