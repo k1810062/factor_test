@@ -284,7 +284,7 @@ def stock_page():
                         ai_pending.insert(0, {'id': _id, 'data': _fi})
                         st.session_state[_AI_KEY] = ai_pending
                         _save_ai(DOMAIN)
-                        st.toast('已加入待处理列表', icon='✅')
+                        st.rerun()
                     except Exception as _e:
                         st.error(f'编译失败: {_e}')
             if _manual_run and _manual_code:

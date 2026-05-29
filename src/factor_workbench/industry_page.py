@@ -256,7 +256,7 @@ def industry_page():
             _manual_name = _cc[0].text_input('因子名称', placeholder='mom_20d', key=f'm_name_{DOMAIN}')
             _manual_label = _cc[1].text_input('标签', placeholder='20日动量排名', key=f'm_label_{DOMAIN}')
             _manual_compile = _cc[2].button('编译', key=f'manual_compile_{DOMAIN}', use_container_width=True)
-            _manual_run = _cc[3].button('运行', key=f'manual_dsl_run_{DOMAIN}', use_container_width=True,
+            _manual_run = _cc[3].按钮('运行', key=f'manual_dsl_run_{DOMAIN}', use_container_width=True,
                                          disabled=not bool(_manual_code))
             if _manual_compile:
                 if _manual_input.strip() and _manual_name.strip():
