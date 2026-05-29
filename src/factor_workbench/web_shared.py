@@ -19,11 +19,29 @@ from pathlib import Path
 from factor_workbench.analysis.auto_config import generate_config
 
 BASE = str(Path(__file__).resolve().parent.parent.parent)  # llm_factors/
+
+# DATA_DIR: 数据目录，默认在项目同级的 factor_data/
+# web_shared.py → factor_workbench/ → src/ → factor_code/（项目根）
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
+DATA_DIR = os.environ.get(
+    'FACTOR_DATA',
+    os.path.join(str(Path(_PROJECT_ROOT).parent), 'factor_data')
+)
+
+# 确保数据目录存在
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, 'data'), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, 'output'), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, 'config'), exist_ok=True)
+
 generate_config()
 load_factor_modules(['factors'])
+# 自动生成 data_dictionary.json（LLM 编译字段校验需要）
+import subprocess as _sp
+_sp.run([sys.executable, 'scripts/scan_schema.py'], capture_output=True, cwd=BASE)
 
-csv_path = os.path.join(BASE, 'output/result/factor_summary.csv')
-_csv_files = sorted(glob.glob(os.path.join(BASE, 'output/result/*_factor_summary.csv')))
+csv_path = os.path.join(DATA_DIR, 'output/result/factor_summary.csv')
+_csv_files = sorted(glob.glob(os.path.join(DATA_DIR, 'output/result/*_factor_summary.csv')))
 TEMPLATE = ''
 
 
@@ -59,7 +77,7 @@ def _parse_decorators(code):
 def _get_func_code(name, kind, domain=None):
     """从对应类型目录提取函数代码。domain 指定时只搜对应文件。"""
     base = 'factors'
-    for f in sorted(glob.glob(f'{BASE}/{base}/*.py')):
+    for f in sorted(glob.glob(f'{DATA_DIR}/{base}/*.py')):
         if not os.path.exists(f):
             continue
         if domain and domain not in os.path.basename(f):
@@ -89,8 +107,8 @@ def _replace_factor(name, kind, code, domain=None):
     func_code = _extract_func(code, name, kind)
     if not func_code:
         return
-    base = os.path.join(BASE, 'features') if kind == 'feature' else os.path.join(BASE, 'factors')
-    other = os.path.join(BASE, 'features') if kind != 'feature' else os.path.join(BASE, 'factors')
+    base = os.path.join(DATA_DIR, 'features') if kind == 'feature' else os.path.join(DATA_DIR, 'factors')
+    other = os.path.join(DATA_DIR, 'features') if kind != 'feature' else os.path.join(DATA_DIR, 'factors')
     search = sorted(glob.glob(f'{base}/*.py')) + sorted(glob.glob(f'{other}/*.py'))
     for f in search:
         if not os.path.exists(f):
@@ -106,7 +124,7 @@ def _replace_factor(name, kind, code, domain=None):
     print(f'  [{name}] 未找到，追加到末尾')
     base_dir = 'features' if kind == 'feature' else 'factors'
     domain = domain or 'stock'
-    target = os.path.join(BASE, f'{base_dir}/{domain}_{base_dir}.py')
+    target = os.path.join(DATA_DIR, f'{base_dir}/{domain}_{base_dir}.py')
     with open(target, 'a') as f:
         f.write('\n\n' + func_code + '\n')
     return True
@@ -120,12 +138,12 @@ def _run_scratch(code, force=False):
     tmp.close()
     env = os.environ.copy()
     src_dir = os.path.join(BASE, 'src')
-    env['PYTHONPATH'] = f'{src_dir}:{env.get("PYTHONPATH", "")}'
+    env['PYTHONPATH'] = f'{src_dir}:{BASE}:{env.get("PYTHONPATH", "")}'
     cmd = [sys.executable, '-m', 'factor_workbench.scratch']
     if force:
         cmd.append('--force')
     cmd.append(tmp_path)
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE, env=env)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=DATA_DIR, env=env)
     os.unlink(tmp_path)
     return result.stdout, result.stderr
 
@@ -139,7 +157,7 @@ def _delete_factor(name, domain=None):
     domain, cat = meta.domain, meta.category
 
     # 1. 从 .py 文件移除函数
-    for f in sorted(glob.glob(f'{BASE}/factors/*.py')):
+    for f in sorted(glob.glob(f'{DATA_DIR}/factors/*.py')):
         txt = open(f).read()
         r = _find_func(txt, name)
         if r:
@@ -150,7 +168,7 @@ def _delete_factor(name, domain=None):
     # 2. 从因子库 parquet 删除列
     from config.domain_config import DOMAIN_CONFIG
     if domain in DOMAIN_CONFIG:
-        fp = f'{BASE}/output/factor_library/{domain}_factors.parquet'
+        fp = f'{DATA_DIR}/output/factor_library/{domain}_factors.parquet'
         if os.path.exists(fp):
             _lib = pd.read_parquet(fp)
             if name in _lib.columns:
@@ -159,13 +177,13 @@ def _delete_factor(name, domain=None):
                 print(f'  [删除] 已从 {fp} 移除数据列')
 
     # 3. 删分析结果
-    _ad = f'{BASE}/output/analysis/{domain}'
+    _ad = f'{DATA_DIR}/output/analysis/{domain}'
     for _d in sorted(glob.glob(f'{_ad}*/{cat}/{name}')):
         shutil.rmtree(_d)
         print(f'  [删除] 已删除分析目录 {_d}')
 
     # 4. 从汇总 CSV 删除行
-    _csv = f'{BASE}/output/result/{domain}_factor_summary.csv'
+    _csv = f'{DATA_DIR}/output/result/{domain}_factor_summary.csv'
     if os.path.exists(_csv):
         _fdf = pd.read_csv(_csv)
         _fdf = _fdf[_fdf['factor'] != name]
@@ -209,7 +227,7 @@ if not full_period.empty:
 
 def refresh_df():
     """重新从 CSV 读取汇总数据，刷新并返回 (df, all_factors)。"""
-    _csv_files[:] = sorted(glob.glob(os.path.join(BASE, 'output/result/*_factor_summary.csv')))
+    _csv_files[:] = sorted(glob.glob(os.path.join(DATA_DIR, 'output/result/*_factor_summary.csv')))
     _df = None
     for _csv in _csv_files:
         _d = pd.read_csv(_csv)
@@ -244,7 +262,7 @@ disp_cols = [c for c in _disp_labels if c in all_factors.columns]
 
 # ---- AI 因子持久化（按 domain 独立存储）----
 def _ai_file(domain):
-    return os.path.join(BASE, 'output', f'ai_pending_{domain}.json')
+    return os.path.join(DATA_DIR, 'output', f'ai_pending_{domain}.json')
 
 
 def _save_ai(domain):
@@ -315,7 +333,7 @@ def _build_req_summary(pending):
 def _refresh_data(domain):
     """重新扫描数据，更新 pending 因子的字段可用性。"""
     subprocess.run([sys.executable, 'scripts/scan_schema.py'], cwd=BASE, capture_output=True)
-    dd_path = os.path.join(BASE, 'factor_generator/config/data_dictionary.json')
+    dd_path = os.path.join(DATA_DIR, 'config', 'data_dictionary.json')
     if not os.path.exists(dd_path):
         return
     data_dict = json.load(open(dd_path))
@@ -369,7 +387,7 @@ def _load_ai(domain):
 # ---- TOC 持久化（按 domain 独立存储）----
 
 def _toc_file(domain):
-    return os.path.join(BASE, 'output', f'toc_items_{domain}.json')
+    return os.path.join(DATA_DIR, 'output', f'toc_items_{domain}.json')
 
 
 def _save_toc(domain):

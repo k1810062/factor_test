@@ -327,15 +327,18 @@ def stock_page():
         if run:
             _code = code
             _replace = replace
+            _force = force  # checkbox：覆盖重算
             st.session_state[f'_tab3_log_{DOMAIN}'] = ''
             st.session_state[f'last_names_{DOMAIN}'] = []
             if _code.strip():
-                stdout, stderr = _run_scratch(_code, force=True)
+                stdout, stderr = _run_scratch(_code, force=_force or _replace)
                 st.session_state[f'_tab3_log_{DOMAIN}'] = stdout
                 if stderr:
                     st.session_state[f'_tab3_log_{DOMAIN}'] += '\n--- 错误 ---\n' + stderr
                 _m = re.search(r"@factor\([^)]*name=['\"]([^'\"]+)['\"]", _code)
                 if _m and stdout:
+                    _FACTORS.clear()
+                    load_factor_modules(['factors'])
                     st.session_state[f'last_names_{DOMAIN}'] = [(_m.group(1), 'factor', DOMAIN)]
                     st.session_state[f'should_scroll_{DOMAIN}'] = True
                     if _replace and '完成' in stdout:
@@ -689,7 +692,7 @@ def stock_page():
                     if entry is None:
                         continue
                     try:
-                        data = entry[0](BASE, name, cat, domain=domain)
+                        data = entry[0](DATA_DIR, name, cat, domain=domain)
                         if data is not None:
                             figs = entry[1](data)
                             cols = st.columns(len(figs))
@@ -708,7 +711,7 @@ def stock_page():
                             continue
                         with cols[j]:
                             try:
-                                data = entry[0](BASE, name, cat, domain=domain)
+                                data = entry[0](DATA_DIR, name, cat, domain=domain)
                                 if data is not None:
                                     fig = entry[1](data, name)
                                     _label = re.search(r'_T(\d+)$', c_name)

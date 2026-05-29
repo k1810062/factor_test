@@ -9,19 +9,27 @@
 import sys, os, json, re
 from pathlib import Path
 
-# 切到项目根目录
-os.chdir(str(Path(__file__).resolve().parent.parent.parent))
+# DATA_DIR
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_PROJECT_ROOT), 'factor_data'))
+
+# 项目根目录加入 sys.path（用于 from config.domain_config 等导入）
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+# 切到数据目录
+os.chdir(_DATA_DIR)
 
 # 首次运行自动生成 config
 from .analysis.auto_config import generate_config
 generate_config()
 
-CONFIG_PATH = 'config/config.json'
+CONFIG_PATH = os.path.join(_DATA_DIR, 'config/config.json')
 _CFG = json.load(open(CONFIG_PATH))
 
 
 def _target(domain):
-    return f'factors/{domain}_factors.py'
+    return os.path.join(_DATA_DIR, f'factors/{domain}_factors.py')
 
 
 def _extract_func(code, name, kind='factor'):
@@ -75,7 +83,7 @@ def main():
         sys.exit(1)
 
     # 写配置
-    fc_path = 'config/factors_config.json'
+    fc_path = os.path.join(_DATA_DIR, 'config/factors_config.json')
     fc = {}
     ow = 'overwrite' if '--force' in sys.argv else 'skip'
     print(f'  → 模式: {ow}{" (--force)" if "--force" in sys.argv else ""}')
@@ -95,7 +103,7 @@ def main():
     if '--force' in sys.argv:
         cfg['analysis_overwrite'] = ['ic', 'decile', 'sig', 'rr', 'ts']
         print('  → 覆盖模式：因子值 + 分析将重算')
-    cfg['sub_period'] = {'from_file': 'data/market_periods.json', 'groups': ['bull', 'bear', 'consolidate']}
+    cfg['sub_period'] = {'from_file': os.path.join(_DATA_DIR, 'data/market_periods.json'), 'groups': ['bull', 'bear', 'consolidate']}
     json.dump(cfg, open(CONFIG_PATH, 'w'), ensure_ascii=False, indent=2)
     print('  → config.json 已改写（基础设施）')
 

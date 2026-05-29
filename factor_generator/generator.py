@@ -11,8 +11,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from factor_generator.llm_client import LLMClient, LLMError
+from pathlib import Path
 # LLM 直接输出真实表名和字段名，不再需要 embedding 匹配
 
+# config_dir 下既有代码配置(prompt)，也有数据配置(api/data_dict)
+# 调用时统一传 config_dir，但 api_config/data_dictionary 需从 DATA_DIR 读
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_PROJECT_ROOT), 'factor_data'))
 _DEFAULT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'config')
 
 
@@ -62,8 +67,11 @@ def _load_text(path: str) -> str:
 
 
 def _resolve_config_path(config_dir: str, filename: str) -> str:
-    path = os.path.join(config_dir, filename)
-    if not os.path.exists(path):
+    # 数据文件优先从 DATA_DIR 读
+    if filename in ('api_config.json', 'data_dictionary.json'):
+        _data_path = os.path.join(_DATA_DIR, 'config', filename)
+        if os.path.exists(_data_path):
+            return _data_path
         if filename == 'api_config.json':
             _template = {
                 "provider": "deepseek",
@@ -73,11 +81,15 @@ def _resolve_config_path(config_dir: str, filename: str) -> str:
                 "max_tokens": 8192,
                 "temperature": 0.1,
             }
-            os.makedirs(config_dir, exist_ok=True)
-            json.dump(_template, open(path, 'w'), ensure_ascii=False, indent=2)
+            os.makedirs(os.path.dirname(_data_path), exist_ok=True)
+            json.dump(_template, open(_data_path, 'w'), ensure_ascii=False, indent=2)
             raise FileNotFoundError(
-                f'首次使用请配置 API Key: {path}\n'
-                f'将 {path} 中的 ${{YOUR_API_KEY}} 替换为你的 API Key')
+                f'首次使用请配置 API Key: {_data_path}\n'
+                f'将 {_data_path} 中的 ${{YOUR_API_KEY}} 替换为你的 API Key')
+        raise FileNotFoundError(f'配置文件不存在: {_data_path}')
+    # 代码配置文件（prompt 模板等）从原目录读
+    path = os.path.join(config_dir, filename)
+    if not os.path.exists(path):
         raise FileNotFoundError(f'配置文件不存在: {path}')
     return path
 

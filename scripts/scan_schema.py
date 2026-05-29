@@ -9,8 +9,13 @@
 import json
 import os
 import re
+from pathlib import Path
 
 import duckdb
+
+# DATA_DIR
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_PROJECT_ROOT), 'factor_data'))
 
 # 表名 → 中文描述（按命名前缀自动匹配）
 _TABLE_PREFIX = {
@@ -60,8 +65,12 @@ def _auto_description(name: str) -> str:
     return ' '.join(matched) if matched else name
 
 
-def main(config_path='config/config.json',
-         output_path='factor_generator/config/data_dictionary.json'):
+def main(config_path=None,
+         output_path=None):
+    if config_path is None:
+        config_path = os.path.join(_DATA_DIR, 'config/config.json')
+    if output_path is None:
+        output_path = os.path.join(_DATA_DIR, 'config/data_dictionary.json')
     with open(config_path) as f:
         config = json.load(f)
 

@@ -256,7 +256,7 @@ def industry_page():
             _manual_name = _cc[0].text_input('因子名称', placeholder='mom_20d', key=f'm_name_{DOMAIN}')
             _manual_label = _cc[1].text_input('标签', placeholder='20日动量排名', key=f'm_label_{DOMAIN}')
             _manual_compile = _cc[2].button('编译', key=f'manual_compile_{DOMAIN}', use_container_width=True)
-            _manual_run = _cc[3].按钮('运行', key=f'manual_dsl_run_{DOMAIN}', use_container_width=True,
+            _manual_run = _cc[3].button('运行', key=f'manual_dsl_run_{DOMAIN}', use_container_width=True,
                                          disabled=not bool(_manual_code))
             if _manual_compile:
                 if _manual_input.strip() and _manual_name.strip():
@@ -326,15 +326,18 @@ def industry_page():
         if run:
             _code = code
             _replace = replace
+            _force = force
             st.session_state[f'_tab3_log_{DOMAIN}'] = ''
             st.session_state[f'last_names_{DOMAIN}'] = []
             if _code.strip():
-                stdout, stderr = _run_scratch(_code, force=True)
+                stdout, stderr = _run_scratch(_code, force=_force or _replace)
                 st.session_state[f'_tab3_log_{DOMAIN}'] = stdout
                 if stderr:
                     st.session_state[f'_tab3_log_{DOMAIN}'] += '\n--- 错误 ---\n' + stderr
                 _m = re.search(r"@factor\([^)]*name=['\"]([^'\"]+)['\"]", _code)
                 if _m and stdout:
+                    _FACTORS.clear()
+                    load_factor_modules(['factors'])
                     st.session_state[f'last_names_{DOMAIN}'] = [(_m.group(1), 'factor', DOMAIN)]
                     st.session_state[f'should_scroll_{DOMAIN}'] = True
                     if _replace and '完成' in stdout:
@@ -687,7 +690,7 @@ def industry_page():
                     if entry is None:
                         continue
                     try:
-                        data = entry[0](BASE, name, cat, domain=domain)
+                        data = entry[0](DATA_DIR, name, cat, domain=domain)
                         if data is not None:
                             figs = entry[1](data)
                             cols = st.columns(len(figs))
@@ -706,7 +709,7 @@ def industry_page():
                             continue
                         with cols[j]:
                             try:
-                                data = entry[0](BASE, name, cat, domain=domain)
+                                data = entry[0](DATA_DIR, name, cat, domain=domain)
                                 if data is not None:
                                     fig = entry[1](data, name)
                                     _label = re.search(r'_T(\d+)$', c_name)
@@ -735,3 +738,5 @@ def industry_page():
             <span style="display:none">""" + str(hash(str(st.session_state.get('_sc', 0)))) + """</span>
             """, unsafe_allow_javascript=True)
             st.session_state._sc = st.session_state.get('_sc', 0) + 1
+
+

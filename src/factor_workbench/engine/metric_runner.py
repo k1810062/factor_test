@@ -1,10 +1,16 @@
 """评价指标调度。按 domain_config 配置运行分析组。"""
 
+import sys
 import json
 import os
 import shutil
 import glob
+from pathlib import Path
 import pandas as pd
+
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 from config.domain_config import DOMAIN_CONFIG
 from ..metrics.groups import ANALYSIS_GROUPS
 

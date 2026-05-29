@@ -1,10 +1,15 @@
 """逐 domain 汇总因子分析结果到各自 CSV。"""
+from pathlib import Path
 import pandas as pd
 import json, os, glob
 
+# DATA_DIR（同 web_shared.py 逻辑）
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent.parent)
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_PROJECT_ROOT), 'factor_data'))
+
 
 def load_config():
-    path = 'config/config.json'
+    path = os.path.join(_DATA_DIR, 'config/config.json')
     if not os.path.exists(path):
         path = 'industry/run_config.json'
     with open(path) as f:
@@ -124,18 +129,18 @@ def summarize_domain(domain, factors_cfg, analysis_dir, out_dir):
 def main():
     cfg = load_config()
     analysis_cfg = cfg.get('analysis_dir', {})
-    fc_path = 'config/factors_config.json'
+    fc_path = os.path.join(_DATA_DIR, 'config/factors_config.json')
 
     if not os.path.exists(fc_path):
         print('无 factors_config.json')
         return
 
     fc = json.load(open(fc_path))
-    out_dir = 'output/result'
+    out_dir = os.path.join(_DATA_DIR, 'output/result')
 
     print('生成汇总表:')
     for domain, factors_cfg in fc.items():
-        analysis_dir = analysis_cfg.get(domain) if isinstance(analysis_cfg, dict) else f'output/analysis/{domain}'
+        analysis_dir = analysis_cfg.get(domain) if isinstance(analysis_cfg, dict) else os.path.join(_DATA_DIR, f'output/analysis/{domain}')
         if not analysis_dir:
             print(f'  [{domain}] 无分析目录配置')
             continue

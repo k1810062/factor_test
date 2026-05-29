@@ -11,7 +11,13 @@
 """
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
+
+
+# DATA_DIR（同 web_shared.py 逻辑）
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_PROJECT_ROOT), 'factor_data'))
 
 
 @dataclass
@@ -51,13 +57,12 @@ def load_factor_modules(factor_dirs=None):
     目录路径以项目根（factor_system/）为基准，不受 CWD 影响。
     """
     # 项目根 = src/factor_workbench/engine/ → src/ → ../
-    _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     if factor_dirs is None:
         factor_dirs = ['factors']
     elif isinstance(factor_dirs, str):
         factor_dirs = [factor_dirs]
     for factor_dir in factor_dirs:
-        factor_dir = os.path.join(_root, factor_dir)
+        factor_dir = os.path.join(_DATA_DIR, factor_dir)
         if not os.path.isdir(factor_dir):
             os.makedirs(factor_dir)
         import pandas as pd, numpy as np

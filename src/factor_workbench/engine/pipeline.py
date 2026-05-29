@@ -6,12 +6,17 @@
 import json
 import os
 import time
+from pathlib import Path
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .data_api import DataAPI
 from .registry import get_factors, load_factor_modules
 from .metric_runner import run_groups
+
+# DATA_DIR 检测（同 web_shared.py 逻辑）
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_PROJECT_ROOT), 'factor_data'))
 
 def _try_read(path):
     try:
@@ -53,8 +58,9 @@ class Pipeline:
         t0 = time.time()
 
         # 计算因子（存 factor_library）
-        if os.path.exists('config/factors_config.json'):
-            for domain, factors in json.load(open('config/factors_config.json')).items():
+        _fc_path = os.path.join(_DATA_DIR, 'config/factors_config.json')
+        if os.path.exists(_fc_path):
+            for domain, factors in json.load(open(_fc_path)).items():
                 pass  # output_paths[domain] 由 config 提供
                 print(f'\n=== {domain} 因子计算 ===')
                 t1 = time.time()
@@ -179,7 +185,7 @@ class Pipeline:
 
     def _run_analysis(self):
         """运行评价指标（按 domain_config 组调度）。"""
-        fc_domains = list(json.load(open('config/factors_config.json')).keys()) if os.path.exists('config/factors_config.json') else ['industry', 'stock']
+        fc_domains = list(json.load(open(os.path.join(_DATA_DIR, 'config/factors_config.json'))).keys()) if os.path.exists(os.path.join(_DATA_DIR, 'config/factors_config.json')) else ['industry', 'stock']
         for factor_type in fc_domains:
             date_col = 'trade_date'
 
@@ -195,7 +201,7 @@ class Pipeline:
             dc = DOMAIN_CONFIG.get(factor_type)
             if not dc:
                 continue
-            _fc = json.load(open('config/factors_config.json')).get(factor_type, {})
+            _fc = json.load(open(os.path.join(_DATA_DIR, 'config/factors_config.json'))).get(factor_type, {})
             _adir = self.cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
             _ow = self.cfg.get('analysis_overwrite', [])
             _need_analysis = {}

@@ -1,7 +1,9 @@
 """临时测试：ma5_cross_ma20 IC 计算，追踪除零警告。"""
 import sys, os, warnings
-os.chdir('/Users/wby/k/factor_test/llm_factors')
-sys.path.insert(0, 'src')
+from pathlib import Path
+_BASE = str(Path(__file__).resolve().parent.parent)
+os.chdir(_BASE)
+sys.path.insert(0, os.path.join(_BASE, 'src'))
 
 warnings.simplefilter('error')  # 把警告转成异常，精确定位
 
@@ -9,14 +11,15 @@ import pandas as pd, numpy as np
 from scipy.stats import spearmanr
 
 # 1. 读取已计算的因子值
-df = pd.read_parquet('output/factor_library/stock_factors.parquet',
+_DATA_DIR = os.environ.get('FACTOR_DATA', os.path.join(os.path.dirname(_BASE), 'factor_data'))
+df = pd.read_parquet(f'{_DATA_DIR}/output/factor_library/stock_factors.parquet',
                      columns=['stock_code', 'trade_date', 'ma5_cross_ma20'])
 print(f'因子值: {len(df)} 行')
 print(f'值分布: {df["ma5_cross_ma20"].value_counts(dropna=False).to_dict()}')
 print(f'日均唯一值数: {df.groupby("trade_date")["ma5_cross_ma20"].nunique().describe()}')
 
 # 2. 读行情算前向收益
-price = pd.read_parquet('data/stock_daily.parquet', columns=['stock_code', 'trade_date', 'close'])
+price = pd.read_parquet(f'{_DATA_DIR}/data/stock_daily.parquet', columns=['stock_code', 'trade_date', 'close'])
 merged = df.merge(price, on=['stock_code', 'trade_date'], how='inner')
 merged = merged.sort_values(['stock_code', 'trade_date']).reset_index(drop=True)
 g = merged.groupby('stock_code')['close']
