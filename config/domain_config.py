@@ -15,6 +15,7 @@ DOMAIN_CONFIG = {
                     'ic_T5', 'icir_T5', 'ic_T10', 'icir_T10', 'ic_T22', 'icir_T22',
                     'long_win', 'short_win', 'kurtosis'],
                 'layout': [
+                    ['_title:因子分析'],
                     ['_table'],
                     ['_title:因子表现'],
                     ['ic_cumulative', 'long_short_T1'],
@@ -56,6 +57,7 @@ DOMAIN_CONFIG = {
                     'ic_T5', 'icir_T5', 'ic_T10', 'icir_T10', 'ic_T22', 'icir_T22',
                     'long_win', 'short_win', 'kurtosis'],
                 'layout': [
+                    ['_title:因子分析'],
                     ['_table'],
                     ['_title:因子表现'],
                     ['ic_cumulative', 'long_short_T1'],
@@ -71,6 +73,18 @@ DOMAIN_CONFIG = {
             'rr': {'ret_horizon': 1},
             'ts': {'show_industry_bar': True},
         },
-        'monthly': None,
+        'monthly': {
+            'analysis_groups': ['ic', 'sig'],
+            'display': {
+                'metrics': ['ic_T22', 'icir_T22', 'kurtosis'],
+                'layout': [
+                    ['_title:因子分析'],
+                    ['_table'],
+                    ['ic_cumulative'],
+                ],
+            },
+            'ic': {'horizons': [22], 'ann_factor': 12**0.5},
+            'sig': {},
+        },
     },
 }

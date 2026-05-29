@@ -57,16 +57,22 @@ class Pipeline:
             for domain, factors in json.load(open('config/factors_config.json')).items():
                 pass  # output_paths[domain] 由 config 提供
                 print(f'\n=== {domain} 因子计算 ===')
+                t1 = time.time()
                 self._compute_domain(domain, factors)
+                print(f'  [{domain}] 计算耗时: {time.time()-t1:.1f}s')
 
         # 分析
+        _ta = time.time()
         if self.cfg.get('analysis'):
             print('\n=== 分析 ===')
             self._run_analysis()
+        print(f'  分析总耗时: {time.time()-_ta:.1f}s')
 
         # 汇总
+        _ts = time.time()
         print('\n=== 生成汇总表 ===')
         self._run_summary()
+        print(f'  汇总总耗时: {time.time()-_ts:.1f}s')
 
         print(f'\n全流程完成, 总耗时 {time.time()-t0:.1f}s')
 
@@ -183,42 +189,46 @@ class Pipeline:
                 if pname not in self.cfg.get('tables', {}):
                     self.api.register_table(pname, p)
 
-            # 预检查：非覆盖模式下，所有分析组已存在则跳过
+            # 逐个因子检查分析结果，非覆盖模式下只跑缺失的
             from config.domain_config import DOMAIN_CONFIG
+            from factor_workbench.engine.metric_runner import _GROUP_DIRS
             dc = DOMAIN_CONFIG.get(factor_type)
-            if dc and not self.cfg.get('analysis_overwrite', []):
-                _fc = json.load(open('config/factors_config.json')).get(factor_type, {})
-                _adir = self.cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
-                # all freq
-                all_groups = set()
-                for _fc_meta in _fc.values():
-                    _fc_freq = _fc_meta.get('freq', 'daily')
-                    _fc_cfg = dc.get(_fc_freq, {})
-                    all_groups.update(_fc_cfg.get('analysis_groups', []))
-                groups = all_groups
-                _all_done = groups and all(
-                    os.path.isdir(f'{_adir}/{meta.get("cat", factor_type)}/{name}/{g}')
-                    for g in groups
-                    for name, meta in _fc.items()
-                )
-                if _all_done:
-                    print(f'  [{factor_type}] 所有分析已存在，跳过')
-                    continue
+            if not dc:
+                continue
+            _fc = json.load(open('config/factors_config.json')).get(factor_type, {})
+            _adir = self.cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
+            _ow = self.cfg.get('analysis_overwrite', [])
+            _need_analysis = {}
+            for name, meta in _fc.items():
+                _freq = meta.get('freq', 'daily')
+                _cfg = dc.get(_freq, {})
+                _groups = _cfg.get('analysis_groups', [])
+                if _ow:
+                    _need_analysis[name] = meta
+                elif not _groups:
+                    _need_analysis[name] = meta
+                elif not all(os.path.isdir(f'{_adir}/{meta.get("cat", factor_type)}/{name}/{_GROUP_DIRS.get(g, g)}')
+                             for g in _groups):
+                    _need_analysis[name] = meta
+            if not _need_analysis:
+                print(f'  [{factor_type}] 所有分析已存在，跳过')
+                continue
 
-            df = self._load_analysis_data(factor_type)
+            df = self._load_analysis_data(factor_type, list(_need_analysis.keys()))
             if df is None:
                 continue
             t0 = time.time()
-            print(f'\n=== {factor_type} 分析 ===')
-            run_groups(self.cfg, factor_type, df, date_col=date_col)
+            print(f'\n=== {factor_type} 分析（{len(_need_analysis)} 个因子）===')
+            run_groups(self.cfg, factor_type, df, date_col=date_col, target_factors=set(_need_analysis.keys()))
             print(f'  [{factor_type}] 总耗时: {time.time()-t0:.1f}s')
 
-    def _load_analysis_data(self, factor_type):
-        """加载分析用的数据。支持外部自定义函数。"""
+    def _load_analysis_data(self, factor_type, columns=None):
+        """加载分析用的数据。columns 指定只加载哪些因子列，为 None 时加载全部。"""
         if self._load_data_fn:
             return self._load_data_fn(self.api, factor_type)
         if factor_type == 'industry':
-            df = self.api.table('industry_factors', columns=None)
+            cols = None if columns is None else ['industry_code', 'trade_date'] + list(columns)
+            df = self.api.table('industry_factors', columns=cols)
             # 合并指数数据算前向收益
             idx = self.api.table('industry_daily', columns=['industry_code', 'trade_date', 'close'])
             idx = idx.rename(columns={'close': 'idx_close'})
@@ -231,7 +241,8 @@ class Pipeline:
         elif factor_type == 'stock':
             if 'stock_factors' not in self.cfg.get('tables', {}):
                 return None
-            df = self.api.table('stock_factors', columns=None)
+            cols = None if columns is None else ['stock_code', 'trade_date'] + list(columns)
+            df = self.api.table('stock_factors', columns=cols)
             if df.empty:
                 return None
             idx = self.api.table('stock_daily', columns=['stock_code', 'trade_date', 'close'])

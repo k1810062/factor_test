@@ -35,7 +35,7 @@ class LLMClient:
         self._headers = {
             'Content-Type': 'application/json',
         }
-        if self.provider == 'openai':
+        if self.provider in ('openai', 'deepseek'):
             self._headers['Authorization'] = f'Bearer {self.api_key}'
         elif self.provider == 'anthropic':
             self._headers['x-api-key'] = self.api_key

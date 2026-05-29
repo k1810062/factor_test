@@ -64,6 +64,20 @@ def _load_text(path: str) -> str:
 def _resolve_config_path(config_dir: str, filename: str) -> str:
     path = os.path.join(config_dir, filename)
     if not os.path.exists(path):
+        if filename == 'api_config.json':
+            _template = {
+                "provider": "deepseek",
+                "model": "deepseek-reasoner",
+                "base_url": "https://api.deepseek.com",
+                "api_key": "${YOUR_API_KEY}",
+                "max_tokens": 8192,
+                "temperature": 0.1,
+            }
+            os.makedirs(config_dir, exist_ok=True)
+            json.dump(_template, open(path, 'w'), ensure_ascii=False, indent=2)
+            raise FileNotFoundError(
+                f'首次使用请配置 API Key: {path}\n'
+                f'将 {path} 中的 ${{YOUR_API_KEY}} 替换为你的 API Key')
         raise FileNotFoundError(f'配置文件不存在: {path}')
     return path
 

@@ -207,6 +207,32 @@ if not full_period.empty:
                         _v[col] = row[col]
                 break
 
+def refresh_df():
+    """重新从 CSV 读取汇总数据，刷新并返回 (df, all_factors)。"""
+    _csv_files[:] = sorted(glob.glob(os.path.join(BASE, 'output/result/*_factor_summary.csv')))
+    _df = None
+    for _csv in _csv_files:
+        _d = pd.read_csv(_csv)
+        _domain = os.path.basename(_csv).replace('_factor_summary.csv', '')
+        _d['domain'] = _domain
+        _df = pd.concat([_df, _d]) if _df is not None else _d
+    # 重建 all_factors
+    _full_period = _df[_df['period'] == 'full'].copy() if _df is not None and not _df.empty else pd.DataFrame()
+    _factor_index = {}
+    for _key, meta in _FACTORS.items():
+        _factor_index[_key] = {'factor': meta.name, 'label': meta.label, 'cat': meta.category, 'domain': meta.domain}
+    if not _full_period.empty:
+        for _, row in _full_period.iterrows():
+            fname = row['factor']
+            for _v in _factor_index.values():
+                if _v['factor'] == fname and _v['domain'] == row.get('domain', ''):
+                    for col in row.index:
+                        if col not in ('factor', 'label', 'cat', 'period'):
+                            _v[col] = row[col]
+                    break
+    _all_factors = pd.DataFrame(list(_factor_index.values()))
+    return _df, _all_factors
+
 all_factors = pd.DataFrame(list(factor_index.values()))
 _disp_labels = {
     'factor': '因子名', 'label': '标签', 'cat': '分类', 'domain': '领域',

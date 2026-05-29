@@ -25,7 +25,7 @@
           "description": "行业代码"
         },
         {
-          "name": "净流入金额（万元）",
+          "name": "net_inflow_amt",
           "type": "DOUBLE",
           "description": "净流入金额（万元）"
         }

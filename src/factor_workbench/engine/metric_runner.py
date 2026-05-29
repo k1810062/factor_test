@@ -43,7 +43,8 @@ def _get_freq_cfg(domain_cfg, freq):
     return fc
 
 
-def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
+def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None, target_factors=None):
+    """运行因子分析。target_factors 指定只分析这些因子名（None=全部）。"""
     domain_cfg = DOMAIN_CONFIG.get(factor_type)
     if not domain_cfg:
         print(f'  [{factor_type}] 无 domain 配置，跳过分析')
@@ -52,6 +53,8 @@ def run_groups(cfg, factor_type, df, date_col='trade_date', base_dir=None):
         base_dir = cfg.get('analysis_dir', {}).get(factor_type, f'output/analysis/{factor_type}')
 
     src = _load_factors(factor_type)
+    if target_factors:
+        src = {k: v for k, v in src.items() if k in target_factors}
     factors = [(k, v['label'], v['cat'], v.get('freq', 'daily')) for k, v in src.items()]
     if not factors:
         print(f'  [{factor_type}] 无因子，跳过')

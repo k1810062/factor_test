@@ -61,9 +61,12 @@ def main():
             continue
         name = _get_kw(dec, 'name')
         domain = _get_kw(dec, 'domain')
+        cat = _get_kw(dec, 'category')
+        label = _get_kw(dec, 'label')
         if not name or not domain:
             continue
         _freq = _get_kw(dec, 'freq') or 'daily'
+        factors.append((name, cat, label, domain, _freq))
 
     if not factors:
         print('错误：未识别到 @factor 装饰器')

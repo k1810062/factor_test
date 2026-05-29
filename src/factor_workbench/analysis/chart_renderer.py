@@ -46,8 +46,8 @@ def render_ic_cumulative(ic_df, name):
     fig = go.Figure()
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
     for h, color in zip(horizons, colors):
-        vals = ic_df[h].dropna().cumsum()
-        fig.add_trace(go.Scatter(x=vals.index, y=vals.values, mode='lines',
+        vals = ic_df[['trade_date', h]].dropna()
+        fig.add_trace(go.Scatter(x=vals['trade_date'], y=vals[h].cumsum().values, mode='lines',
                                  name=h, line=dict(color=color, width=1.5)))
     fig.add_hline(y=0, line_dash='dash', line_color='gray', line_width=0.6)
     fig.update_layout(title=f'{name} 累计 Rank IC',

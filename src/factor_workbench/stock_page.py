@@ -6,7 +6,7 @@ from factor_workbench.web_shared import (
     _disp_labels,
     _find_func, _get_func_code, _extract_func,
     _replace_factor, _run_scratch, _delete_factor,
-    _build_req_summary, _refresh_data, _load_ai, _save_ai,
+    _build_req_summary, _refresh_data, refresh_df, _load_ai, _save_ai,
     _save_toc, _load_toc, _set_toc_items,
     _FACTORS,
 )
@@ -25,6 +25,7 @@ def stock_page():
     st.session_state.setdefault(_TOC_KEY, [])
     _load_ai(DOMAIN)
     _load_toc(DOMAIN)
+    all_factors = refresh_df()[1]
 
     st.subheader('📈 个股因子')
 
@@ -49,18 +50,25 @@ def stock_page():
                 if st.checkbox(f'{_bm.name} ({_bm.label})', key=_k):
                     _sel_factors.append(_bm)
             if st.button(f'执行 ({len(_sel_factors)} 个)'):
-                _log_lines = []
+                _log_lines = [f'批量运行: {len(_sel_factors)} 个因子, 模式={_mode}']
+                _t_start = time.time()
+                # 合并所有因子代码到单个 temp 文件，一次 subprocess
+                _combined = 'import pandas as pd, numpy as np\n'
                 for _meta in _sel_factors:
                     _code = _get_func_code(_meta.name, 'factor', domain=_meta.domain)
-                    if not _code:
-                        _log_lines.append(f'[{_meta.name}] 无代码')
-                        continue
-                    _force = _mode == 'overwrite'
-                    _out, _err = _run_scratch(_code, force=_force)
-                    if _err:
-                        _log_lines.append(f'[{_meta.name}] ❌ {_err[:800]}')
+                    if _code:
+                        _combined += '\n' + _code + '\n'
+                _force = _mode == 'overwrite'
+                _t0 = time.time()
+                _out, _err = _run_scratch(_combined, force=_force)
+                _elapsed = time.time() - _t0
+                for _meta in _sel_factors:
+                    if _err and _meta.name in _err:
+                        _log_lines.append(f'  [{_meta.name}] ❌ ({_elapsed:.1f}s)')
                     else:
-                        _log_lines.append(f'[{_meta.name}] ✅')
+                        _log_lines.append(f'  [{_meta.name}] ✅ ({_elapsed:.1f}s)')
+                _t_total = time.time() - _t_start
+                _log_lines.append(f'总耗时: {_t_total:.1f}s')
                 st.session_state[f'ai_log_{DOMAIN}'] = '\n'.join(_log_lines)
                 st.rerun()
 
@@ -296,7 +304,7 @@ def stock_page():
         with _col_l:
             st.caption('代码')
             _result = code_editor(TEMPLATE, lang='python', height='420px', key=f'factor_code_v1_{DOMAIN}',
-                                  response_mode=['blur', 'debounce'],
+                                  response_mode=['blur', 'debounce', 'update'],
                                   options={'showInvisibles': False, 'minimap': {'enabled': False}})
             code = _result.get('text') or TEMPLATE
             c1, c2, c3 = st.columns(3)
@@ -312,15 +320,26 @@ def stock_page():
                 run = st.button('运行', width='stretch')
         with _col_r:
             st.caption('运行日志')
-            log_text = st.session_state.get(f'_tab3_log_{DOMAIN}', '')
-            st.text_area('运行日志', log_text, height=420, label_visibility='collapsed', disabled=True, key=f'tab3_log_{DOMAIN}')
+            log_text = st.session_state.get(f'tab3_log_{DOMAIN}', '')
+            st.text_area('运行日志', value=st.session_state.get(f'_tab3_log_{DOMAIN}', ''),
+                         height=420, label_visibility='collapsed', disabled=True)
 
         if run:
-            st.session_state[f'replace_pending_{DOMAIN}'] = replace
+            _code = code
+            _replace = replace
             st.session_state[f'_tab3_log_{DOMAIN}'] = ''
             st.session_state[f'last_names_{DOMAIN}'] = []
-            st.session_state.pending = True
-            st.session_state[f'search_key_{DOMAIN}'] = str(hash(str(time.time())))
+            if _code.strip():
+                stdout, stderr = _run_scratch(_code, force=True)
+                st.session_state[f'_tab3_log_{DOMAIN}'] = stdout
+                if stderr:
+                    st.session_state[f'_tab3_log_{DOMAIN}'] += '\n--- 错误 ---\n' + stderr
+                _m = re.search(r"@factor\([^)]*name=['\"]([^'\"]+)['\"]", _code)
+                if _m and stdout:
+                    st.session_state[f'last_names_{DOMAIN}'] = [(_m.group(1), 'factor', DOMAIN)]
+                    st.session_state[f'should_scroll_{DOMAIN}'] = True
+                    if _replace and '完成' in stdout:
+                        _replace_factor(_m.group(1), 'factor', _code, domain=DOMAIN)
             st.rerun()
 
     # ── 待处理因子 ──
@@ -410,6 +429,11 @@ def stock_page():
                     st.session_state[_AI_KEY] = ai_pending
                     _save_ai(DOMAIN)
                     st.rerun()
+        # 显式待办运行日志
+        _run_log = st.session_state.get(f'_pending_run_log_{DOMAIN}', '')
+        if _run_log:
+            st.text_area('运行日志', value=_run_log, height=200, disabled=True, label_visibility='collapsed')
+
         with _btn_cols[3]:
             if st.button('删除', key=f'ai_del_{DOMAIN}'):
                 ai_pending = [p for p in ai_pending if p['id'] != _sel_id]
@@ -628,22 +652,9 @@ def stock_page():
             st.code(_found, language='python')
 
     # ---- 显示结果 ----
+    df, all_factors = refresh_df()
     names = st.session_state.get(f'last_names_{DOMAIN}', [])
     if names:
-        if df is not None and not df.empty:
-            from factor_workbench.engine.registry import get_factor as _gf
-            _tbl_name, _tbl_kind, _tbl_dom = names[0]
-            _tbl_meta = _gf(_tbl_name, _tbl_dom) if _tbl_dom else get_factors().get(_tbl_name)
-            if _tbl_meta:
-                from config.domain_config import DOMAIN_CONFIG
-                _tbl_dc = DOMAIN_CONFIG.get(_tbl_meta.domain, {}).get(_tbl_meta.freq, {})
-                _tbl_layout = _tbl_dc.get('display', {}).get('layout', [])
-                if any('_table' in row for row in _tbl_layout):
-                    _tbl_metrics = _tbl_dc.get('display', {}).get('metrics', [])
-                    html = render_metrics_table(df, names, _tbl_metrics)
-                    if html:
-                        st.markdown(html, unsafe_allow_html=True)
-
         for name, kind, dom in names:
             from factor_workbench.engine.registry import get_factor as _gf
             meta = _gf(name, dom) if dom else get_factors().get(name)
@@ -665,8 +676,14 @@ def stock_page():
 
                 if item and isinstance(item, str) and item.startswith('_title:'):
                     st.subheader(item[7:])
-                elif item in ('_table', '_comparison'):
-                    pass
+                elif item == '_table':
+                    if df is not None and not df.empty and names:
+                        from config.domain_config import DOMAIN_CONFIG as _DC
+                        _ddc = _DC.get(domain, {}).get(meta.freq, {})
+                        _dm = _ddc.get('display', {}).get('metrics', [])
+                        _html = render_metrics_table(df, names, _dm)
+                        if _html:
+                            st.markdown(_html, unsafe_allow_html=True)
                 elif len(row) == 1 and item in MULTI_CHARTS:
                     entry = CHART_MAP.get(item)
                     if entry is None:
